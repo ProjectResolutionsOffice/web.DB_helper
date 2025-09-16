@@ -1,0 +1,5 @@
+{
+  "name": "DB도우미",
+  "description": "A simple, client-side ER Diagram editor built with React and Konva.js. Add entities, move them around, and export your diagram as a PNG image.",
+  "requestFramePermissions": []
+}

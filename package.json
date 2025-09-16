@@ -1,0 +1,25 @@
+{
+  "name": "make_edr",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "konva": "^10.0.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-konva": "^19.0.10"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "parcel": "^2.15.4",
+    "process": "^0.11.10",
+    "typescript": "^5.5.3"
+  },
+    "scripts": {
+    "start": "parcel index.html",
+    "build": "parcel build index.html"
+  }
+}

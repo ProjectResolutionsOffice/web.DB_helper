@@ -1,0 +1,13 @@
+# Dependency directory
+/node_modules
+
+# Parcel cache
+/.parcel-cache
+
+# Distribution folder (build output)
+/dist
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
