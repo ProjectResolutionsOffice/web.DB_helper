@@ -479,8 +479,10 @@ const App = () => {
       </div>
       <footer className="page-footer">
         <div className="adfit-placeholder">
-          {/* 여기에 카카오 애드핏 코드를 삽입하세요. */}
-          <span>Kakao AdFit Banner</span>
+            <ins className="kakao_ad_area" style={{ display: 'none' }}
+                data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
+                data-ad-width = "728"
+                data-ad-height = "90"></ins>
         </div>
         <div className="footer-info">
           <div className="footer-text">
