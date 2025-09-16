@@ -482,6 +482,7 @@ const App = () => {
               data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
               data-ad-width = "728"
               data-ad-height = "90"></ins>
+          <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
         <div className="footer-info">
           <div className="footer-text">
             <p>
