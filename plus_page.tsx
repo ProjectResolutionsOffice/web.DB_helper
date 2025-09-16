@@ -478,12 +478,10 @@ const App = () => {
         </div>
       </div>
       <footer className="page-footer">
-        <div className="adfit-placeholder">
-            <ins className="kakao_ad_area" style={{ display: 'none' }}
-                data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
-                data-ad-width = "728"
-                data-ad-height = "90"></ins>
-        </div>
+          <ins className="kakao_ad_area" 
+              data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
+              data-ad-width = "728"
+              data-ad-height = "90"></ins>
         <div className="footer-info">
           <div className="footer-text">
             <p>
