@@ -16,6 +16,6 @@
     "skipLibCheck": true           // 설치된 라이브러리(node_modules)의 타입 검사는 건너뛰어 속도 향상
   },
   "include": [
-    "index.tsx" // TypeScript 컴파일러가 관리할 파일 목록 (여기서는 index.tsx만 해당)
+    "plus_page.tsx" // TypeScript 컴파일러가 관리할 파일 목록 (여기서는 plus_page.tsx만 해당)
   ]
 }
