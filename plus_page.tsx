@@ -14,6 +14,23 @@ interface Relationship { id: string; fromId: string; toId: string; startCardinal
 interface EntityComponentProps { entity: Entity; isSelected: boolean; onDragEnd: (id: string, x: number, y: number) => void; onClick: (id:string) => void; onDblClick: (id: string) => void; }
 const ENTITY_STYLES: { [key in EntityType]: { fill: string; stroke: string; textColor: string } } = { Entity: { fill: '#1abc9c', stroke: '#16a085', textColor: '#ffffff' }, Action: { fill: '#3498db', stroke: '#2980b9', textColor: '#ffffff' }, Attribute: { fill: '#e74c3c', stroke: '#c0392b', textColor: '#ffffff' }, };
 
+// [수정 1-1] ErdView 컴포넌트에 전달될 props 타입을 정의합니다.
+interface ErdViewProps {
+  entities: Entity[];
+  relationships: Relationship[];
+  onStateChange: (entitiesUpdater: any, relationshipsUpdater: any) => void;
+  selectedEntityId: string | null;
+  setSelectedEntityId: React.Dispatch<React.SetStateAction<string | null>>;
+  selectedRelationshipId: string | null;
+  setSelectedRelationshipId: React.Dispatch<React.SetStateAction<string | null>>;
+  relationshipCreation: { active: boolean; fromId: string | null };
+  setRelationshipCreation: React.Dispatch<React.SetStateAction<{ active: boolean; fromId: string | null }>>;
+  editingEntityId: string | null;
+  setEditingEntityId: React.Dispatch<React.SetStateAction<string | null>>;
+  showCardinality: boolean;
+  containerRef: React.RefObject<HTMLDivElement>;
+}
+
 // --- ERD REUSABLE COMPONENTS ---
 
 const EntityShape = ({ entity, isSelected }: { entity: Entity, isSelected: boolean }) => { /* ... (unchanged) ... */ 
@@ -196,7 +213,7 @@ const SqlView = ({ view, createTableState, setCreateTableState, alterTableState,
 
 // --- ERD VIEW COMPONENT ---
 
-const ErdView = ({
+const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     entities, relationships, onStateChange,
     selectedEntityId, setSelectedEntityId,
     selectedRelationshipId, setSelectedRelationshipId,
@@ -204,8 +221,7 @@ const ErdView = ({
     editingEntityId, setEditingEntityId,
     showCardinality,
     containerRef,
-}) => {
-  const stageRef = useRef<Konva.Stage>(null);
+}, stageRef) => { // forwarded ref를 'stageRef' 인자로 받습니다.
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({ display: 'none' });
   
@@ -214,6 +230,9 @@ const ErdView = ({
 
   const updateTextareaPosition = useCallback(() => {
       const entity = entities.find(e => e.id === editingEntityId);
+        // [수정 2] 전달받은 stageRef를 사용하여 Konva Stage 인스턴스를 가져옵니다.
+        // forwardedRef는 객체일 수도, 함수일 수도, null일 수도 있으므로 타입 가드가 필요합니다.
+      const stage = (stageRef && 'current' in stageRef) ? stageRef.current : null;
       if (!entity || !stageRef.current || !containerRef.current) {
           setTextareaStyle({ display: 'none' });
           return;
@@ -240,8 +259,7 @@ const ErdView = ({
               borderColor: styles.textColor,
           });
       }
-  }, [editingEntityId, entities, containerRef]);
-
+  }, [editingEntityId, entities, containerRef, stageRef]); // stageRef를 의존성 배열에 추가합니다.
 
   useEffect(() => {
     updateTextareaPosition();
@@ -316,7 +334,9 @@ const App = () => {
   const [showCardinality, setShowCardinality] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const erdContainerRef = useRef<HTMLDivElement>(null);
-
+  // [수정 3] Konva Stage에 대한 ref를 생성하여 직접 접근할 수 있도록 합니다.
+  const stageRef = useRef<Konva.Stage>(null);
+    
   // SQL State
   const [createTableState, setCreateTableState] = useState({
       tableName: '',
@@ -387,6 +407,9 @@ const App = () => {
   };
 
   useLayoutEffect(() => {
+    // [수정 5] DOM 쿼리 대신 ref를 사용하여 Stage 인스턴스에 직접 접근합니다.
+    // 이것이 훨씬 더 안정적이고 React스러운 방식입니다.
+    const stage = stageRef.current;
     if (isExporting) {
         const stage = (document.querySelector('.konvajs-content canvas') as any)?._konvaNode;
         if (stage) {
@@ -459,6 +482,8 @@ const App = () => {
         <div className={`main-content-area ${mode === 'ERD' ? 'erd-mode' : ''}`}>
           {mode === 'ERD' ? (
             <ErdView 
+              // [수정 4] 생성한 stageRef를 ErdView 컴포넌트에 전달합니다.
+              ref={stageRef}
               entities={entities} relationships={relationships}
               onStateChange={updateState}
               selectedEntityId={selectedEntityId} setSelectedEntityId={setSelectedEntityId}
@@ -515,4 +540,5 @@ const container = document.getElementById('root');
 if(container) {
     const root = createRoot(container);
     root.render(<App />);
+
 }
