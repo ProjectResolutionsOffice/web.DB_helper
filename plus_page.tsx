@@ -213,6 +213,7 @@ const SqlView = ({ view, createTableState, setCreateTableState, alterTableState,
 
 // --- ERD VIEW COMPONENT ---
 
+// [수정 1-2] App 컴포넌트에서 Stage ref에 접근할 수 있도록 React.forwardRef를 사용합니다.
 const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     entities, relationships, onStateChange,
     selectedEntityId, setSelectedEntityId,
@@ -230,14 +231,14 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
 
   const updateTextareaPosition = useCallback(() => {
       const entity = entities.find(e => e.id === editingEntityId);
-        // [수정 2] 전달받은 stageRef를 사용하여 Konva Stage 인스턴스를 가져옵니다.
-        // forwardedRef는 객체일 수도, 함수일 수도, null일 수도 있으므로 타입 가드가 필요합니다.
+      // [수정 2] 전달받은 stageRef를 사용하여 Konva Stage 인스턴스를 가져옵니다.
+      // forwardedRef는 객체일 수도, 함수일 수도, null일 수도 있으므로 타입 가드가 필요합니다.
       const stage = (stageRef && 'current' in stageRef) ? stageRef.current : null;
-      if (!entity || !stageRef.current || !containerRef.current) {
+      if (!entity || !stage || !containerRef.current) {
           setTextareaStyle({ display: 'none' });
           return;
       }
-      const entityNode = stageRef.current.findOne(`#${entity.id}`);
+      const entityNode = stage.findOne(`#${entity.id}`);
       if (entityNode) {
           const styles = ENTITY_STYLES[entity.type];
           const textPosition = entityNode.getAbsolutePosition();
@@ -260,6 +261,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
           });
       }
   }, [editingEntityId, entities, containerRef, stageRef]); // stageRef를 의존성 배열에 추가합니다.
+
 
   useEffect(() => {
     updateTextareaPosition();
@@ -313,7 +315,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
         {editingEntity && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
     </div>
   );
-};
+});
 
 
 // --- MAIN APP COMPONENT ---
@@ -336,7 +338,7 @@ const App = () => {
   const erdContainerRef = useRef<HTMLDivElement>(null);
   // [수정 3] Konva Stage에 대한 ref를 생성하여 직접 접근할 수 있도록 합니다.
   const stageRef = useRef<Konva.Stage>(null);
-    
+
   // SQL State
   const [createTableState, setCreateTableState] = useState({
       tableName: '',
@@ -407,11 +409,10 @@ const App = () => {
   };
 
   useLayoutEffect(() => {
-    // [수정 5] DOM 쿼리 대신 ref를 사용하여 Stage 인스턴스에 직접 접근합니다.
-    // 이것이 훨씬 더 안정적이고 React스러운 방식입니다.
-    const stage = stageRef.current;
     if (isExporting) {
-        const stage = (document.querySelector('.konvajs-content canvas') as any)?._konvaNode;
+        // [수정 5] DOM 쿼리 대신 ref를 사용하여 Stage 인스턴스에 직접 접근합니다.
+        // 이것이 훨씬 더 안정적이고 React스러운 방식입니다.
+        const stage = stageRef.current;
         if (stage) {
             const dataURL = stage.toDataURL({ mimeType: 'image/png', quality: 1, pixelRatio: 2 });
             const link = document.createElement('a');
@@ -503,11 +504,12 @@ const App = () => {
         </div>
       </div>
       <footer className="page-footer">
-          <ins className="kakao_ad_area" 
-              data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
-              data-ad-width = "728"
-              data-ad-height = "90"></ins>
-          <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
+        <div className="adfit-placeholder">
+            <ins className="kakao_ad_area" style={{ display: 'none' }}
+                data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
+                data-ad-width = "728"
+                data-ad-height = "90"></ins>
+        </div>
         <div className="footer-info">
           <div className="footer-text">
             <p>
@@ -540,5 +542,4 @@ const container = document.getElementById('root');
 if(container) {
     const root = createRoot(container);
     root.render(<App />);
-
 }
