@@ -473,7 +473,7 @@ const App = () => {
                 <fieldset>
                     <legend>SQL 작업</legend>
                     <button onClick={() => setSqlView('CREATE')} className={sqlView === 'CREATE' ? 'active' : ''}>테이블 생성</button>
-                    <button onClick={() => setSqlView('ALTER')} className={sqlView === 'ALTER' ? 'active' : ''} style={{marginTop: '8px'}}>테이블 변경</button>
+                    <button onClick={() => setSqlView('ALTER')} className={sqlView === 'ALTER' ? 'active' : ''}>테이블 변경</button>
                 </fieldset>
               </>
             )}
@@ -542,5 +542,3 @@ if(container) {
     const root = createRoot(container);
     root.render(<App />);
 }
-
-
