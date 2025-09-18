@@ -28,7 +28,7 @@ body {
 
 /* Left-side toolbar */
 .toolbar {
-  width: 220px;
+  width: 240px;
   background-color: #ffffff;
   padding: 20px;
   box-shadow: 2px 0 5px rgba(0,0,0,0.1);
@@ -55,6 +55,7 @@ body {
     background-color: #f8f9fa;
     color: #34495e;
     padding: 10px;
+    height: 60px;
     font-size: 14px !important;
 }
 .mode-switcher button:hover {
@@ -333,6 +334,7 @@ body {
     margin-bottom: 10px;
 }
 
+#root > div > div > div.toolbar > div.toolbar-scroll-container > fieldset > button:nth-child(3){margin-top: 8px;}
 .alter-type-selector {
     display: flex;
     gap: 20px;
@@ -511,5 +513,9 @@ body {
   .footer-text {
     font-size: 11px;
     text-align: center;
+  }
+
+  #root > div > div > div.toolbar > div.toolbar-scroll-container > fieldset > button:nth-child(3){
+    margin-top: 0px;
   }
 }
