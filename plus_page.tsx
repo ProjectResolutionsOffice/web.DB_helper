@@ -17,6 +17,8 @@ const ENTITY_STYLES: { [key in EntityType]: { fill: string; stroke: string; text
 interface ErdViewProps {
   entities: { [id: string]: Entity };
   relationships: Relationship[];
+  relationshipsById: { [id: string]: Relationship };
+  entityToRelationshipMap: { [id: string]: string[] };
   onStateChange: (entitiesUpdater: any, relationshipsUpdater: any) => void;
   selectedEntityId: string | null;
   setSelectedEntityId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -256,7 +258,7 @@ const SqlView = ({ view, createTableState, setCreateTableState, alterTableState,
 // --- ERD VIEW COMPONENT ---
 
 const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
-    entities, relationships, onStateChange,
+    entities, relationships, relationshipsById, entityToRelationshipMap, onStateChange,
     selectedEntityId, setSelectedEntityId,
     selectedRelationshipId, setSelectedRelationshipId,
     relationshipCreation, setRelationshipCreation,
@@ -330,36 +332,38 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     if (!draggedEntityData) return;
     
     const tempDraggedEntity = { ...draggedEntityData, x: currentPos.x, y: currentPos.y };
+    
+    const relationshipIdsToUpdate = entityToRelationshipMap[entityId] || [];
 
-    relationships.forEach(rel => {
-        if (rel.fromId === entityId || rel.toId === entityId) {
-            const fromEntity = rel.fromId === entityId ? tempDraggedEntity : entities[rel.fromId];
-            const toEntity = rel.toId === entityId ? tempDraggedEntity : entities[rel.toId];
+    for (const relId of relationshipIdsToUpdate) {
+        const rel = relationshipsById[relId];
+        if (!rel) continue;
 
-            if (!fromEntity || !toEntity) return;
+        const fromEntity = rel.fromId === entityId ? tempDraggedEntity : entities[rel.fromId];
+        const toEntity = rel.toId === entityId ? tempDraggedEntity : entities[rel.toId];
+        if (!fromEntity || !toEntity) continue;
 
-            const { points, startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
+        const { points, startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
+        
+        const lineGroup = stage.findOne('#' + rel.id);
+        if (lineGroup) {
+            const line = (lineGroup as Konva.Group).findOne('.relationship-line');
+            if (line) (line as Konva.Line).points(points);
             
-            const lineGroup = stage.findOne('#' + rel.id);
-            if (lineGroup) {
-                const line = (lineGroup as Konva.Group).findOne('.relationship-line');
-                if(line) (line as Konva.Line).points(points);
-                
-                const startSymbol = (lineGroup as Konva.Group).findOne('.start-cardinality');
-                if(startSymbol) {
-                    startSymbol.position({x: startSymbolProps.x, y: startSymbolProps.y});
-                    startSymbol.rotation(startSymbolProps.rotation);
-                }
+            const startSymbol = (lineGroup as Konva.Group).findOne('.start-cardinality');
+            if (startSymbol) {
+                startSymbol.position({ x: startSymbolProps.x, y: startSymbolProps.y });
+                startSymbol.rotation(startSymbolProps.rotation);
+            }
 
-                const endSymbol = (lineGroup as Konva.Group).findOne('.end-cardinality');
-                if(endSymbol) {
-                    endSymbol.position({x: endSymbolProps.x, y: endSymbolProps.y});
-                    endSymbol.rotation(endSymbolProps.rotation);
-                }
+            const endSymbol = (lineGroup as Konva.Group).findOne('.end-cardinality');
+            if (endSymbol) {
+                endSymbol.position({ x: endSymbolProps.x, y: endSymbolProps.y });
+                endSymbol.rotation(endSymbolProps.rotation);
             }
         }
-    });
-  }, [entities, relationships]);
+    }
+  }, [entities, relationshipsById, entityToRelationshipMap]);
 
     const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.currentTarget;
@@ -536,6 +540,30 @@ const App = () => {
     setHistory([...newHistory, { entities: newEntities, relationships: newRelationships }]);
     setHistoryIndex(newHistory.length);
   }, [history, historyIndex]);
+
+  const relationshipsById = useMemo(() => {
+    const map: { [id: string]: Relationship } = {};
+    for (const rel of relationships) {
+        map[rel.id] = rel;
+    }
+    return map;
+  }, [relationships]);
+
+  const entityToRelationshipMap = useMemo(() => {
+      const map: { [id: string]: string[] } = {};
+      for (const entityId in entities) {
+          map[entityId] = [];
+      }
+      for (const rel of relationships) {
+          if (map[rel.fromId]) {
+              map[rel.fromId].push(rel.id);
+          }
+          if (map[rel.toId]) {
+              map[rel.toId].push(rel.id);
+          }
+      }
+      return map;
+  }, [entities, relationships]);
   
   const handleUndo = () => { if (historyIndex > 0) setHistoryIndex(historyIndex - 1); };
   const handleRedo = () => { if (historyIndex < history.length - 1) setHistoryIndex(historyIndex + 1); };
@@ -665,7 +693,10 @@ const App = () => {
           {mode === 'ERD' ? (
             <ErdView 
               ref={stageRef}
-              entities={entities} relationships={relationships}
+              entities={entities} 
+              relationships={relationships}
+              relationshipsById={relationshipsById}
+              entityToRelationshipMap={entityToRelationshipMap}
               onStateChange={updateState}
               selectedEntityId={selectedEntityId} setSelectedEntityId={setSelectedEntityId}
               selectedRelationshipId={selectedRelationshipId} setSelectedRelationshipId={setSelectedRelationshipId}
