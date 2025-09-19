@@ -33,7 +33,7 @@ interface ErdViewProps {
 
 // --- ERD REUSABLE COMPONENTS ---
 
-const EntityShape = ({ entity, isSelected }: { entity: Entity, isSelected: boolean }) => { /* ... (unchanged) ... */ 
+const EntityShape = React.memo(({ entity, isSelected }: { entity: Entity, isSelected: boolean }) => { /* ... (unchanged) ... */ 
     const styles = ENTITY_STYLES[entity.type];
     const commonProps = {
         fill: styles.fill,
@@ -52,8 +52,8 @@ const EntityShape = ({ entity, isSelected }: { entity: Entity, isSelected: boole
         case 'Attribute': return <Ellipse {...commonProps} x={entity.width / 2} y={entity.height / 2} radiusX={entity.width / 2} radiusY={entity.height / 2} />;
         default: return <Rect {...commonProps} width={entity.width} height={entity.height} cornerRadius={8} />;
     }
-};
-const EntityComponent = ({ entity, isSelected, onDragEnd, onClick, onDblClick }: EntityComponentProps) => { /* ... (unchanged, onDragMove removed for performance) ... */
+});
+const EntityComponent = React.memo(({ entity, isSelected, onDragEnd, onClick, onDblClick }: EntityComponentProps) => { /* ... (unchanged, onDragMove removed for performance) ... */
   const styles = ENTITY_STYLES[entity.type];
   const textWidth = entity.type === 'Action' ? entity.width * 0.7 : entity.width;
   const textHeight = entity.type === 'Action' ? entity.height * 0.7 : entity.height;
@@ -63,8 +63,8 @@ const EntityComponent = ({ entity, isSelected, onDragEnd, onClick, onDblClick }:
       <Text text={entity.name} fontSize={18} fontFamily="Arial" fill={styles.textColor} width={textWidth} height={textHeight} x={(entity.width - textWidth) / 2} y={(entity.height - textHeight) / 2} padding={10} align="center" verticalAlign="middle" listening={false} />
     </Group>
   );
-};
-const CardinalitySymbol = ({ x, y, rotation, cardinality, onClick, onMouseEnter, onMouseLeave }: { x: number; y: number; rotation: number; cardinality: Cardinality; onClick: () => void; onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => void }) => { /* ... (unchanged) ... */
+});
+const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, onMouseEnter, onMouseLeave }: { x: number; y: number; rotation: number; cardinality: Cardinality; onClick: () => void; onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => void }) => { /* ... (unchanged) ... */
     const symbolColor = '#c0392b';
     const strokeWidth = 2;
     const renderSymbol = () => {
@@ -79,8 +79,8 @@ const CardinalitySymbol = ({ x, y, rotation, cardinality, onClick, onMouseEnter,
         }
     };
     return (<Group x={x} y={y} rotation={rotation} onClick={onClick} onTap={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>{renderSymbol()}</Group>);
-};
-const RelationshipLine = ({ fromEntity, toEntity, relationship, isSelected, onSelect, onCardinalityChange, showCardinality }: { fromEntity: Entity; toEntity: Entity; relationship: Relationship; isSelected: boolean; onSelect: (id: string) => void; onCardinalityChange: (id: string, point: 'start' | 'end') => void; showCardinality: boolean; }) => { /* ... (unchanged) ... */
+});
+const RelationshipLine = React.memo(({ fromEntity, toEntity, relationship, isSelected, onSelect, onCardinalityChange, showCardinality }: { fromEntity: Entity; toEntity: Entity; relationship: Relationship; isSelected: boolean; onSelect: (id: string) => void; onCardinalityChange: (id: string, point: 'start' | 'end') => void; showCardinality: boolean; }) => { /* ... (unchanged) ... */
     if (!fromEntity || !toEntity) return null;
     const getAnchors = (e: Entity) => [{ x: e.x + e.width / 2, y: e.y }, { x: e.x + e.width, y: e.y + e.height / 2 }, { x: e.x + e.width / 2, y: e.y + e.height }, { x: e.x, y: e.y + e.height / 2 }, ];
     const fromAnchors = getAnchors(fromEntity); const toAnchors = getAnchors(toEntity); let minDistance = Infinity; let bestPoints = { from: fromAnchors[0], to: toAnchors[0] };
@@ -90,7 +90,7 @@ const RelationshipLine = ({ fromEntity, toEntity, relationship, isSelected, onSe
     const handleMouseEnter = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'pointer'; };
     const handleMouseLeave = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'default'; };
     return (<Group><Line points={points} stroke={isSelected ? '#ff8c00' : '#34495e'} strokeWidth={isSelected ? 3 : 2} onClick={() => onSelect(relationship.id)} onTap={() => onSelect(relationship.id)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />{showCardinality && (<><CardinalitySymbol x={bestPoints.from.x + offset * Math.cos(angleRad)} y={bestPoints.from.y + offset * Math.sin(angleRad)} rotation={angleDeg + 180} cardinality={relationship.startCardinality} onClick={() => onCardinalityChange(relationship.id, 'start')} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /><CardinalitySymbol x={bestPoints.to.x - offset * Math.cos(angleRad)} y={bestPoints.to.y - offset * Math.sin(angleRad)} rotation={angleDeg} cardinality={relationship.endCardinality} onClick={() => onCardinalityChange(relationship.id, 'end')} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /></>)}</Group>);
-};
+});
 
 // --- SQL COMPONENTS ---
 
