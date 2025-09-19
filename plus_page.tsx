@@ -213,7 +213,6 @@ const SqlView = ({ view, createTableState, setCreateTableState, alterTableState,
 
 // --- ERD VIEW COMPONENT ---
 
-// [수정 1-2] App 컴포넌트에서 Stage ref에 접근할 수 있도록 React.forwardRef를 사용합니다.
 const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     entities, relationships, onStateChange,
     selectedEntityId, setSelectedEntityId,
@@ -222,17 +221,15 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     editingEntityId, setEditingEntityId,
     showCardinality,
     containerRef,
-}, stageRef) => { // forwarded ref를 'stageRef' 인자로 받습니다.
+}, stageRef) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({ display: 'none' });
   
-  const setEntities = (updater) => onStateChange(updater, prevRels => prevRels);
-  const setRelationships = (updater) => onStateChange(prevEnts => prevEnts, updater);
+  const setEntities = useCallback((updater) => onStateChange(updater, prevRels => prevRels), [onStateChange]);
+  const setRelationships = useCallback((updater) => onStateChange(prevEnts => prevEnts, updater), [onStateChange]);
 
   const updateTextareaPosition = useCallback(() => {
       const entity = entities.find(e => e.id === editingEntityId);
-      // [수정 2] 전달받은 stageRef를 사용하여 Konva Stage 인스턴스를 가져옵니다.
-      // forwardedRef는 객체일 수도, 함수일 수도, null일 수도 있으므로 타입 가드가 필요합니다.
       const stage = (stageRef && 'current' in stageRef) ? stageRef.current : null;
       if (!entity || !stage || !containerRef.current) {
           setTextareaStyle({ display: 'none' });
@@ -242,7 +239,6 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
       if (entityNode) {
           const styles = ENTITY_STYLES[entity.type];
           const textPosition = entityNode.getAbsolutePosition();
-          const stagePos = containerRef.current.getBoundingClientRect();
           const textWidth = entity.type === 'Action' ? entity.width * 0.7 : entity.width;
           const textHeight = entity.type === 'Action' ? entity.height * 0.7 : entity.height;
           const xOffset = (entity.width - textWidth) / 2;
@@ -260,7 +256,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
               borderColor: styles.textColor,
           });
       }
-  }, [editingEntityId, entities, containerRef, stageRef]); // stageRef를 의존성 배열에 추가합니다.
+  }, [editingEntityId, entities, containerRef, stageRef]);
 
 
   useEffect(() => {
@@ -270,38 +266,109 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     }
     const container = containerRef.current;
     if (container) {
+      window.addEventListener('resize', updateTextareaPosition);
       container.addEventListener('scroll', updateTextareaPosition);
-      return () => container.removeEventListener('scroll', updateTextareaPosition);
+      return () => {
+        window.removeEventListener('resize', updateTextareaPosition);
+        container.removeEventListener('scroll', updateTextareaPosition);
+      }
     }
   }, [editingEntityId, updateTextareaPosition, containerRef]);
 
 
-  const handleEntityMove = (id: string, x: number, y: number) => setEntities((prev) => prev.map((e) => e.id === id ? { ...e, x, y } : e));
-  const handleEntityDblClick = (id: string) => { setRelationshipCreation({ active: false, fromId: null }); setSelectedRelationshipId(null); setSelectedEntityId(null); setEditingEntityId(id); };
-  const handleFinishEditing = () => { if (!editingEntityId || !textareaRef.current) return; const newName = textareaRef.current.value; setEntities(prev => prev.map(e => e.id === editingEntityId ? {...e, name: newName} : e)); setEditingEntityId(null); };
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFinishEditing(); } if (e.key === 'Escape') { setEditingEntityId(null); } };
-  const handleEntityClick = (id: string) => {
-    if (!relationshipCreation.active) { setSelectedRelationshipId(null); setSelectedEntityId(id); return; }
-    if (!relationshipCreation.fromId) { setSelectedEntityId(null); setRelationshipCreation({ active: true, fromId: id }); } 
-    else {
+  const handleEntityMove = useCallback((id: string, x: number, y: number) => {
+    setEntities((prev) => prev.map((e) => e.id === id ? { ...e, x, y } : e));
+    updateTextareaPosition();
+  }, [setEntities, updateTextareaPosition]);
+
+  const handleEntityDblClick = useCallback((id: string) => {
+    setRelationshipCreation({ active: false, fromId: null });
+    setSelectedRelationshipId(null);
+    setSelectedEntityId(null);
+    setEditingEntityId(id);
+  }, [setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId, setEditingEntityId]);
+
+  const handleFinishEditing = useCallback(() => {
+    if (!editingEntityId || !textareaRef.current) return;
+    const newName = textareaRef.current.value;
+    setEntities(prev => prev.map(e => e.id === editingEntityId ? {...e, name: newName} : e));
+    setEditingEntityId(null);
+  }, [editingEntityId, setEntities, setEditingEntityId]);
+
+  const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleFinishEditing();
+    }
+    if (e.key === 'Escape') {
+      setEditingEntityId(null);
+    }
+  }, [handleFinishEditing, setEditingEntityId]);
+
+  const handleEntityClick = useCallback((id: string) => {
+    if (editingEntityId) setEditingEntityId(null);
+
+    if (!relationshipCreation.active) {
+      setSelectedRelationshipId(null);
+      setSelectedEntityId(id);
+      return;
+    }
+    if (!relationshipCreation.fromId) {
+      setSelectedEntityId(null);
+      setRelationshipCreation({ active: true, fromId: id });
+    } else {
         if (relationshipCreation.fromId === id) return;
-        const fromId = relationshipCreation.fromId; const toId = id;
+        const fromId = relationshipCreation.fromId;
+        const toId = id;
         const alreadyExists = relationships.some(rel => (rel.fromId === fromId && rel.toId === toId) || (rel.fromId === toId && rel.toId === fromId));
-        if (alreadyExists) { alert('이미 관계가 설정되어 있는 상태라 관계를 생성할수 없습니다.'); setRelationshipCreation({ active: false, fromId: null }); return; }
-        const newRelationship: Relationship = { id: crypto.randomUUID(), fromId: relationshipCreation.fromId, toId: id, startCardinality: 'ONE_AND_ONLY_ONE', endCardinality: 'ONE_AND_ONLY_ONE', };
+        if (alreadyExists) {
+          alert('이미 관계가 설정되어 있는 상태라 관계를 생성할수 없습니다.');
+          setRelationshipCreation({ active: false, fromId: null });
+          return;
+        }
+        const newRelationship: Relationship = { id: crypto.randomUUID(), fromId: relationshipCreation.fromId, toId: id, startCardinality: 'ONE_AND_ONLY_ONE', endCardinality: 'ONE_AND_ONLY_ONE' };
         setRelationships(prev => [...prev, newRelationship]);
         setRelationshipCreation({ active: false, fromId: null });
     }
-  };
-  const handleRelationshipSelect = (id: string) => { setEditingEntityId(null); setRelationshipCreation({ active: false, fromId: null }); setSelectedEntityId(null); setSelectedRelationshipId(id); };
-  const handleCardinalityChange = (relationshipId: string, point: 'start' | 'end') => { setRelationships(prevRels => prevRels.map(rel => { if (rel.id === relationshipId) { const targetProp = point === 'start' ? 'startCardinality' : 'endCardinality'; const currentCardinality = rel[targetProp]; const currentIndex = CARDINALITIES.indexOf(currentCardinality); const nextIndex = (currentIndex + 1) % CARDINALITIES.length; return { ...rel, [targetProp]: CARDINALITIES[nextIndex], }; } return rel; })); };
-  const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => { if(e.target === e.target.getStage()) { setEditingEntityId(null); setRelationshipCreation({ active: false, fromId: null }); setSelectedRelationshipId(null); setSelectedEntityId(null); } };
+  }, [editingEntityId, relationshipCreation, relationships, setRelationships, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId, setEditingEntityId]);
+  
+  const handleRelationshipSelect = useCallback((id: string) => {
+    setEditingEntityId(null);
+    setRelationshipCreation({ active: false, fromId: null });
+    setSelectedEntityId(null);
+    setSelectedRelationshipId(id);
+  }, [setEditingEntityId, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId]);
+
+  const handleCardinalityChange = useCallback((relationshipId: string, point: 'start' | 'end') => {
+    setRelationships(prevRels =>
+      prevRels.map(rel => {
+        if (rel.id === relationshipId) {
+          const targetProp = point === 'start' ? 'startCardinality' : 'endCardinality';
+          const currentCardinality = rel[targetProp];
+          const currentIndex = CARDINALITIES.indexOf(currentCardinality);
+          const nextIndex = (currentIndex + 1) % CARDINALITIES.length;
+          return { ...rel, [targetProp]: CARDINALITIES[nextIndex] };
+        }
+        return rel;
+      })
+    );
+  }, [setRelationships]);
+
+  const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if(e.target === e.target.getStage()) {
+      if(editingEntityId) handleFinishEditing();
+      setRelationshipCreation({ active: false, fromId: null });
+      setSelectedRelationshipId(null);
+      setSelectedEntityId(null);
+    }
+  }, [editingEntityId, handleFinishEditing, setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId]);
+  
 
   const editingEntity = entities.find(e => e.id === editingEntityId);
 
   return (
     <div className={`canvas-container ${relationshipCreation.active ? 'relationship-mode' : ''}`} ref={containerRef}>
-        <Stage width={3000} height={2000} ref={stageRef} onClick={handleStageClick}>
+        <Stage width={3000} height={2000} ref={stageRef} onClick={handleStageClick} onTap={handleStageClick}>
           <Layer>
             {relationships.map((rel) => {
                 const fromEntity = entities.find(e => e.id === rel.fromId);
@@ -312,7 +379,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
             {entities.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragEnd={handleEntityMove} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
           </Layer>
         </Stage>
-        {editingEntity && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
+        {editingEntityId && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity?.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
     </div>
   );
 });
@@ -336,7 +403,6 @@ const App = () => {
   const [showCardinality, setShowCardinality] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const erdContainerRef = useRef<HTMLDivElement>(null);
-  // [수정 3] Konva Stage에 대한 ref를 생성하여 직접 접근할 수 있도록 합니다.
   const stageRef = useRef<Konva.Stage>(null);
 
   // SQL State
@@ -380,6 +446,9 @@ const App = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (mode === 'ERD') {
+            const isEditing = !!editingEntityId;
+            if (isEditing) return;
+
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); handleUndo(); }
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') { e.preventDefault(); handleRedo(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); handleRedo(); }
@@ -388,7 +457,7 @@ const App = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode, selectedRelationshipId, selectedEntityId, handleDeleteSelected, handleUndo, handleRedo]);
+  }, [mode, selectedRelationshipId, selectedEntityId, editingEntityId, handleDeleteSelected, handleUndo, handleRedo]);
   
   const handleAddEntity = (type: EntityType) => {
     const container = erdContainerRef.current;
@@ -410,8 +479,6 @@ const App = () => {
 
   useLayoutEffect(() => {
     if (isExporting) {
-        // [수정 5] DOM 쿼리 대신 ref를 사용하여 Stage 인스턴스에 직접 접근합니다.
-        // 이것이 훨씬 더 안정적이고 React스러운 방식입니다.
         const stage = stageRef.current;
         if (stage) {
             const dataURL = stage.toDataURL({ mimeType: 'image/png', quality: 1, pixelRatio: 2 });
@@ -483,7 +550,6 @@ const App = () => {
         <div className={`main-content-area ${mode === 'ERD' ? 'erd-mode' : ''}`}>
           {mode === 'ERD' ? (
             <ErdView 
-              // [수정 4] 생성한 stageRef를 ErdView 컴포넌트에 전달합니다.
               ref={stageRef}
               entities={entities} relationships={relationships}
               onStateChange={updateState}
