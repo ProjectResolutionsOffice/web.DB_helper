@@ -77,7 +77,16 @@ const calculateRelationshipRenderProps = (fromEntity: Entity, toEntity: Entity) 
 };
 
 
-// --- ERD REUSABLE COMPONENTS ---
+// --- ERD REUSABLE COMPONENTS with custom comparison ---
+
+const areEntityShapesEqual = (prevProps, nextProps) => {
+    return (
+        prevProps.isSelected === nextProps.isSelected &&
+        prevProps.entity.type === nextProps.entity.type &&
+        prevProps.entity.width === nextProps.entity.width &&
+        prevProps.entity.height === nextProps.entity.height
+    );
+};
 
 const EntityShape = React.memo(({ entity, isSelected }: { entity: Entity, isSelected: boolean }) => {
     const styles = ENTITY_STYLES[entity.type];
@@ -98,7 +107,24 @@ const EntityShape = React.memo(({ entity, isSelected }: { entity: Entity, isSele
         case 'Attribute': return <Ellipse {...commonProps} x={entity.width / 2} y={entity.height / 2} radiusX={entity.width / 2} radiusY={entity.height / 2} />;
         default: return <Rect {...commonProps} width={entity.width} height={entity.height} cornerRadius={8} />;
     }
-});
+}, areEntityShapesEqual);
+
+
+const areEntitiesEqual = (prevProps, nextProps) => {
+  const { entity: prevEntity, isSelected: prevIsSelected } = prevProps;
+  const { entity: nextEntity, isSelected: nextIsSelected } = nextProps;
+
+  return (
+    prevIsSelected === nextIsSelected &&
+    prevEntity.id === nextEntity.id &&
+    prevEntity.x === nextEntity.x &&
+    prevEntity.y === nextEntity.y &&
+    prevEntity.width === nextEntity.width &&
+    prevEntity.height === nextEntity.height &&
+    prevEntity.name === nextEntity.name &&
+    prevEntity.type === nextEntity.type
+  );
+};
 const EntityComponent = React.memo(({ entity, isSelected, onDragMove, onDragEnd, onClick, onDblClick }: EntityComponentProps) => {
   const styles = ENTITY_STYLES[entity.type];
   const textWidth = entity.type === 'Action' ? entity.width * 0.7 : entity.width;
@@ -109,7 +135,17 @@ const EntityComponent = React.memo(({ entity, isSelected, onDragMove, onDragEnd,
       <Text text={entity.name} fontSize={18} fontFamily="Arial" fill={styles.textColor} width={textWidth} height={textHeight} x={(entity.width - textWidth) / 2} y={(entity.height - textHeight) / 2} padding={10} align="center" verticalAlign="middle" listening={false} />
     </Group>
   );
-});
+}, areEntitiesEqual);
+
+
+const areCardinalitySymbolsEqual = (prevProps, nextProps) => {
+    return (
+        prevProps.x === nextProps.x &&
+        prevProps.y === nextProps.y &&
+        prevProps.rotation === nextProps.rotation &&
+        prevProps.cardinality === nextProps.cardinality
+    );
+}
 const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, onMouseEnter, onMouseLeave, name }: { name?: string; x: number; y: number; rotation: number; cardinality: Cardinality; onClick: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => void }) => {
     const symbolColor = '#c0392b';
     const strokeWidth = 2;
@@ -125,7 +161,24 @@ const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, on
         }
     };
     return (<Group name={name} x={x} y={y} rotation={rotation} onClick={onClick} onTap={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>{renderSymbol()}</Group>);
-});
+}, areCardinalitySymbolsEqual);
+
+const areRelationshipsEqual = (prevProps, nextProps) => {
+  const { fromEntity: prevFrom, toEntity: prevTo, relationship: prevRel, isSelected: prevIsSelected, showCardinality: prevShowCardinality } = prevProps;
+  const { fromEntity: nextFrom, toEntity: nextTo, relationship: nextRel, isSelected: nextIsSelected, showCardinality: nextShowCardinality } = nextProps;
+
+  if (!prevFrom || !prevTo || !nextFrom || !nextTo) return false;
+
+  return (
+    prevIsSelected === nextIsSelected &&
+    prevShowCardinality === nextShowCardinality &&
+    prevRel.id === nextRel.id &&
+    prevRel.startCardinality === nextRel.startCardinality &&
+    prevRel.endCardinality === nextRel.endCardinality &&
+    prevFrom.id === nextFrom.id && prevFrom.x === nextFrom.x && prevFrom.y === nextFrom.y && prevFrom.width === nextFrom.width && prevFrom.height === nextFrom.height &&
+    prevTo.id === nextTo.id && prevTo.x === nextTo.x && prevTo.y === nextTo.y && prevTo.width === nextTo.width && prevTo.height === nextTo.height
+  );
+};
 const RelationshipLine = React.memo(({ fromEntity, toEntity, relationship, isSelected, onSelect, onCardinalityChange, showCardinality }: { fromEntity: Entity; toEntity: Entity; relationship: Relationship; isSelected: boolean; onSelect: (e: Konva.KonvaEventObject<MouseEvent>) => void; onCardinalityChange: (e: Konva.KonvaEventObject<MouseEvent>) => void; showCardinality: boolean; }) => {
     if (!fromEntity || !toEntity) return null;
     
@@ -134,7 +187,7 @@ const RelationshipLine = React.memo(({ fromEntity, toEntity, relationship, isSel
     const handleMouseEnter = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'pointer'; };
     const handleMouseLeave = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'default'; };
     return (<Group id={relationship.id}><Line name="relationship-line" points={points} stroke={isSelected ? '#ff8c00' : '#34495e'} strokeWidth={isSelected ? 3 : 2} onClick={onSelect} onTap={onSelect} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />{showCardinality && (<><CardinalitySymbol name="start-cardinality" x={startSymbolProps.x} y={startSymbolProps.y} rotation={startSymbolProps.rotation} cardinality={relationship.startCardinality} onClick={onCardinalityChange} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /><CardinalitySymbol name="end-cardinality" x={endSymbolProps.x} y={endSymbolProps.y} rotation={endSymbolProps.rotation} cardinality={relationship.endCardinality} onClick={onCardinalityChange} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /></>)}</Group>);
-});
+}, areRelationshipsEqual);
 
 // --- SQL COMPONENTS ---
 
