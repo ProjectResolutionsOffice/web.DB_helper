@@ -11,10 +11,9 @@ const CARDINALITIES: Cardinality[] = ['ONE_AND_ONLY_ONE', 'ZERO_OR_ONE', 'ONE_OR
 
 interface Entity { id: string; x: number; y: number; width: number; height: number; name: string; type: EntityType; }
 interface Relationship { id: string; fromId: string; toId: string; startCardinality: Cardinality; endCardinality: Cardinality; }
-interface EntityComponentProps { entity: Entity; isSelected: boolean; onDragMove: (id: string, x: number, y: number) => void; onDragEnd: (id: string, x: number, y: number) => void; onClick: (id:string) => void; onDblClick: (id: string) => void; }
+interface EntityComponentProps { entity: Entity; isSelected: boolean; onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => void; onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void; onClick: (e: Konva.KonvaEventObject<MouseEvent>) => void; onDblClick: (e: Konva.KonvaEventObject<MouseEvent>) => void; }
 const ENTITY_STYLES: { [key in EntityType]: { fill: string; stroke: string; textColor: string } } = { Entity: { fill: '#1abc9c', stroke: '#16a085', textColor: '#ffffff' }, Action: { fill: '#3498db', stroke: '#2980b9', textColor: '#ffffff' }, Attribute: { fill: '#e74c3c', stroke: '#c0392b', textColor: '#ffffff' }, };
 
-// [수정 1-1] ErdView 컴포넌트에 전달될 props 타입을 정의합니다.
 interface ErdViewProps {
   entities: Entity[];
   relationships: Relationship[];
@@ -31,9 +30,54 @@ interface ErdViewProps {
   containerRef: React.RefObject<HTMLDivElement>;
 }
 
+// --- HELPERS ---
+const calculateRelationshipRenderProps = (fromEntity: Entity, toEntity: Entity) => {
+    const getAnchors = (e: Entity) => [
+        { x: e.x + e.width / 2, y: e.y }, 
+        { x: e.x + e.width, y: e.y + e.height / 2 }, 
+        { x: e.x + e.width / 2, y: e.y + e.height }, 
+        { x: e.x, y: e.y + e.height / 2 },
+    ];
+
+    const fromAnchors = getAnchors(fromEntity);
+    const toAnchors = getAnchors(toEntity);
+    let minDistance = Infinity;
+    let bestPoints = { from: fromAnchors[0], to: toAnchors[0] };
+
+    for (const fromPoint of fromAnchors) {
+        for (const toPoint of toAnchors) {
+            const distance = Math.hypot(fromPoint.x - toPoint.x, fromPoint.y - toPoint.y);
+            if (distance < minDistance) {
+                minDistance = distance;
+                bestPoints = { from: fromPoint, to: toPoint };
+            }
+        }
+    }
+
+    const points = [bestPoints.from.x, bestPoints.from.y, bestPoints.to.x, bestPoints.to.y];
+    const angleRad = Math.atan2(bestPoints.to.y - bestPoints.from.y, bestPoints.to.x - bestPoints.from.x);
+    const angleDeg = angleRad * (180 / Math.PI);
+    const offset = 20;
+
+    const startSymbolProps = {
+        x: bestPoints.from.x + offset * Math.cos(angleRad),
+        y: bestPoints.from.y + offset * Math.sin(angleRad),
+        rotation: angleDeg + 180,
+    };
+
+    const endSymbolProps = {
+        x: bestPoints.to.x - offset * Math.cos(angleRad),
+        y: bestPoints.to.y - offset * Math.sin(angleRad),
+        rotation: angleDeg,
+    };
+
+    return { points, startSymbolProps, endSymbolProps };
+};
+
+
 // --- ERD REUSABLE COMPONENTS ---
 
-const EntityShape = React.memo(({ entity, isSelected }: { entity: Entity, isSelected: boolean }) => { /* ... (unchanged) ... */ 
+const EntityShape = React.memo(({ entity, isSelected }: { entity: Entity, isSelected: boolean }) => {
     const styles = ENTITY_STYLES[entity.type];
     const commonProps = {
         fill: styles.fill,
@@ -58,13 +102,13 @@ const EntityComponent = React.memo(({ entity, isSelected, onDragMove, onDragEnd,
   const textWidth = entity.type === 'Action' ? entity.width * 0.7 : entity.width;
   const textHeight = entity.type === 'Action' ? entity.height * 0.7 : entity.height;
   return (
-    <Group id={entity.id} x={entity.x} y={entity.y} draggable onDragMove={(e) => onDragMove(entity.id, e.target.x(), e.target.y())} onDragEnd={(e) => onDragEnd(entity.id, e.target.x(), e.target.y())} onClick={() => onClick(entity.id)} onTap={() => onClick(entity.id)} onDblClick={() => onDblClick(entity.id)} onDblTap={() => onDblClick(entity.id)}>
+    <Group id={entity.id} x={entity.x} y={entity.y} draggable onDragMove={onDragMove} onDragEnd={onDragEnd} onClick={onClick} onTap={onClick} onDblClick={onDblClick} onDblTap={onDblClick}>
       <EntityShape entity={entity} isSelected={isSelected} />
       <Text text={entity.name} fontSize={18} fontFamily="Arial" fill={styles.textColor} width={textWidth} height={textHeight} x={(entity.width - textWidth) / 2} y={(entity.height - textHeight) / 2} padding={10} align="center" verticalAlign="middle" listening={false} />
     </Group>
   );
 });
-const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, onMouseEnter, onMouseLeave }: { x: number; y: number; rotation: number; cardinality: Cardinality; onClick: () => void; onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => void }) => { /* ... (unchanged) ... */
+const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, onMouseEnter, onMouseLeave, name }: { name?: string; x: number; y: number; rotation: number; cardinality: Cardinality; onClick: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => void; onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => void }) => {
     const symbolColor = '#c0392b';
     const strokeWidth = 2;
     const renderSymbol = () => {
@@ -78,18 +122,16 @@ const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, on
             default: return null;
         }
     };
-    return (<Group x={x} y={y} rotation={rotation} onClick={onClick} onTap={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>{renderSymbol()}</Group>);
+    return (<Group name={name} x={x} y={y} rotation={rotation} onClick={onClick} onTap={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>{renderSymbol()}</Group>);
 });
-const RelationshipLine = React.memo(({ fromEntity, toEntity, relationship, isSelected, onSelect, onCardinalityChange, showCardinality }: { fromEntity: Entity; toEntity: Entity; relationship: Relationship; isSelected: boolean; onSelect: (id: string) => void; onCardinalityChange: (id: string, point: 'start' | 'end') => void; showCardinality: boolean; }) => { /* ... (unchanged) ... */
+const RelationshipLine = React.memo(({ fromEntity, toEntity, relationship, isSelected, onSelect, onCardinalityChange, showCardinality }: { fromEntity: Entity; toEntity: Entity; relationship: Relationship; isSelected: boolean; onSelect: (e: Konva.KonvaEventObject<MouseEvent>) => void; onCardinalityChange: (e: Konva.KonvaEventObject<MouseEvent>) => void; showCardinality: boolean; }) => {
     if (!fromEntity || !toEntity) return null;
-    const getAnchors = (e: Entity) => [{ x: e.x + e.width / 2, y: e.y }, { x: e.x + e.width, y: e.y + e.height / 2 }, { x: e.x + e.width / 2, y: e.y + e.height }, { x: e.x, y: e.y + e.height / 2 }, ];
-    const fromAnchors = getAnchors(fromEntity); const toAnchors = getAnchors(toEntity); let minDistance = Infinity; let bestPoints = { from: fromAnchors[0], to: toAnchors[0] };
-    for (const fromPoint of fromAnchors) { for (const toPoint of toAnchors) { const distance = Math.hypot(fromPoint.x - toPoint.x, fromPoint.y - toPoint.y); if (distance < minDistance) { minDistance = distance; bestPoints = { from: fromPoint, to: toPoint }; } } }
-    const points = [bestPoints.from.x, bestPoints.from.y, bestPoints.to.x, bestPoints.to.y];
-    const angleRad = Math.atan2(bestPoints.to.y - bestPoints.from.y, bestPoints.to.x - bestPoints.from.x); const angleDeg = angleRad * (180 / Math.PI); const offset = 20;
+    
+    const { points, startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
+
     const handleMouseEnter = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'pointer'; };
     const handleMouseLeave = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'default'; };
-    return (<Group><Line points={points} stroke={isSelected ? '#ff8c00' : '#34495e'} strokeWidth={isSelected ? 3 : 2} onClick={() => onSelect(relationship.id)} onTap={() => onSelect(relationship.id)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />{showCardinality && (<><CardinalitySymbol x={bestPoints.from.x + offset * Math.cos(angleRad)} y={bestPoints.from.y + offset * Math.sin(angleRad)} rotation={angleDeg + 180} cardinality={relationship.startCardinality} onClick={() => onCardinalityChange(relationship.id, 'start')} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /><CardinalitySymbol x={bestPoints.to.x - offset * Math.cos(angleRad)} y={bestPoints.to.y - offset * Math.sin(angleRad)} rotation={angleDeg} cardinality={relationship.endCardinality} onClick={() => onCardinalityChange(relationship.id, 'end')} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /></>)}</Group>);
+    return (<Group id={relationship.id}><Line name="relationship-line" points={points} stroke={isSelected ? '#ff8c00' : '#34495e'} strokeWidth={isSelected ? 3 : 2} onClick={onSelect} onTap={onSelect} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />{showCardinality && (<><CardinalitySymbol name="start-cardinality" x={startSymbolProps.x} y={startSymbolProps.y} rotation={startSymbolProps.rotation} cardinality={relationship.startCardinality} onClick={onCardinalityChange} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /><CardinalitySymbol name="end-cardinality" x={endSymbolProps.x} y={endSymbolProps.y} rotation={endSymbolProps.rotation} cardinality={relationship.endCardinality} onClick={onCardinalityChange} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /></>)}</Group>);
 });
 
 // --- SQL COMPONENTS ---
@@ -275,17 +317,65 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     }
   }, [editingEntityId, updateTextareaPosition, containerRef]);
 
+  const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    const stage = e.target.getStage();
+    if (!stage) return;
 
-  const handleEntityMove = useCallback((id: string, x: number, y: number) => {
-    setEntities((prev) => prev.map((e) => e.id === id ? { ...e, x, y } : e));
-  }, [setEntities]);
+    const draggedNode = e.target;
+    const entityId = draggedNode.id();
+    const currentPos = draggedNode.position();
 
-  const handleEntityDblClick = useCallback((id: string) => {
-    setRelationshipCreation({ active: false, fromId: null });
-    setSelectedRelationshipId(null);
-    setSelectedEntityId(null);
-    setEditingEntityId(id);
-  }, [setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId, setEditingEntityId]);
+    const draggedEntityData = entities.find(en => en.id === entityId);
+    if (!draggedEntityData) return;
+    
+    const tempDraggedEntity = { ...draggedEntityData, x: currentPos.x, y: currentPos.y };
+
+    relationships.forEach(rel => {
+        if (rel.fromId === entityId || rel.toId === entityId) {
+            const fromEntity = rel.fromId === entityId ? tempDraggedEntity : entities.find(en => en.id === rel.fromId);
+            const toEntity = rel.toId === entityId ? tempDraggedEntity : entities.find(en => en.id === rel.toId);
+
+            if (!fromEntity || !toEntity) return;
+
+            const { points, startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
+            
+            const lineGroup = stage.findOne('#' + rel.id);
+            if (lineGroup) {
+                // FIX: The findOne method is only available on Container nodes (like Stage, Layer, Group), not on generic Nodes.
+                // The result of stage.findOne() is a Node, so it must be cast to a Group to allow further findOne() calls.
+                // Additionally, the found 'line' node must be cast to a Line to access its specific 'points' method.
+                const line = (lineGroup as Konva.Group).findOne('.relationship-line');
+                if(line) (line as Konva.Line).points(points);
+                
+                const startSymbol = (lineGroup as Konva.Group).findOne('.start-cardinality');
+                if(startSymbol) {
+                    startSymbol.position({x: startSymbolProps.x, y: startSymbolProps.y});
+                    startSymbol.rotation(startSymbolProps.rotation);
+                }
+
+                const endSymbol = (lineGroup as Konva.Group).findOne('.end-cardinality');
+                if(endSymbol) {
+                    endSymbol.position({x: endSymbolProps.x, y: endSymbolProps.y});
+                    endSymbol.rotation(endSymbolProps.rotation);
+                }
+            }
+        }
+    });
+  }, [entities, relationships]);
+
+    const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+        const node = e.currentTarget;
+        setEntities(prev => prev.map(en => en.id === node.id() ? { ...en, x: node.x(), y: node.y() } : en));
+    }, [setEntities]);
+
+    const handleEntityDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+        const id = e.currentTarget.id();
+        setRelationshipCreation({ active: false, fromId: null });
+        setSelectedRelationshipId(null);
+        setSelectedEntityId(null);
+        setEditingEntityId(id);
+    }, [setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId, setEditingEntityId]);
+
 
   const handleFinishEditing = useCallback(() => {
     if (!editingEntityId || !textareaRef.current) return;
@@ -304,8 +394,12 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     }
   }, [handleFinishEditing, setEditingEntityId]);
 
-  const handleEntityClick = useCallback((id: string) => {
-    if (editingEntityId) setEditingEntityId(null);
+  const handleEntityClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const id = e.currentTarget.id();
+    if (editingEntityId) {
+        handleFinishEditing();
+        setEditingEntityId(null);
+    }
 
     if (!relationshipCreation.active) {
       setSelectedRelationshipId(null);
@@ -329,16 +423,28 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
         setRelationships(prev => [...prev, newRelationship]);
         setRelationshipCreation({ active: false, fromId: null });
     }
-  }, [editingEntityId, relationshipCreation, relationships, setRelationships, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId, setEditingEntityId]);
+  }, [editingEntityId, relationshipCreation, relationships, setRelationships, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId, setEditingEntityId, handleFinishEditing]);
   
-  const handleRelationshipSelect = useCallback((id: string) => {
+  const handleRelationshipSelect = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const relationshipGroup = e.currentTarget.getParent();
+    const id = relationshipGroup?.id();
+    if (!id) return;
+
+    if (editingEntityId) handleFinishEditing();
     setEditingEntityId(null);
     setRelationshipCreation({ active: false, fromId: null });
     setSelectedEntityId(null);
     setSelectedRelationshipId(id);
-  }, [setEditingEntityId, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId]);
+  }, [editingEntityId, handleFinishEditing, setEditingEntityId, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId]);
 
-  const handleCardinalityChange = useCallback((relationshipId: string, point: 'start' | 'end') => {
+  const handleCardinalityChange = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const symbolGroup = e.currentTarget;
+    const relationshipGroup = symbolGroup.getParent();
+    const relationshipId = relationshipGroup?.id();
+    const point = symbolGroup.name().startsWith('start') ? 'start' : 'end';
+    
+    if (!relationshipId) return;
+
     setRelationships(prevRels =>
       prevRels.map(rel => {
         if (rel.id === relationshipId) {
@@ -364,9 +470,6 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
   
 
   const editingEntity = entities.find(e => e.id === editingEntityId);
-  const handleDragEnd = useCallback(() => {
-    // onDragEnd logic can be lighter now, maybe for history state management if needed
-  }, []);
 
   return (
     <div className={`canvas-container ${relationshipCreation.active ? 'relationship-mode' : ''}`} ref={containerRef}>
@@ -378,7 +481,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
                 if (!fromEntity || !toEntity) return null;
                 return <RelationshipLine key={rel.id} fromEntity={fromEntity} toEntity={toEntity} relationship={rel} isSelected={selectedRelationshipId === rel.id} onSelect={handleRelationshipSelect} onCardinalityChange={handleCardinalityChange} showCardinality={showCardinality} />;
             })}
-            {entities.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragMove={handleEntityMove} onDragEnd={handleDragEnd} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
+            {entities.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
           </Layer>
         </Stage>
         {editingEntityId && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity?.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
