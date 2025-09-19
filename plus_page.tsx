@@ -11,7 +11,7 @@ const CARDINALITIES: Cardinality[] = ['ONE_AND_ONLY_ONE', 'ZERO_OR_ONE', 'ONE_OR
 
 interface Entity { id: string; x: number; y: number; width: number; height: number; name: string; type: EntityType; }
 interface Relationship { id: string; fromId: string; toId: string; startCardinality: Cardinality; endCardinality: Cardinality; }
-interface EntityComponentProps { entity: Entity; isSelected: boolean; onDragEnd: (id: string, x: number, y: number) => void; onClick: (id:string) => void; onDblClick: (id: string) => void; }
+interface EntityComponentProps { entity: Entity; isSelected: boolean; onDragMove: (id: string, x: number, y: number) => void; onDragEnd: (id: string, x: number, y: number) => void; onClick: (id:string) => void; onDblClick: (id: string) => void; }
 const ENTITY_STYLES: { [key in EntityType]: { fill: string; stroke: string; textColor: string } } = { Entity: { fill: '#1abc9c', stroke: '#16a085', textColor: '#ffffff' }, Action: { fill: '#3498db', stroke: '#2980b9', textColor: '#ffffff' }, Attribute: { fill: '#e74c3c', stroke: '#c0392b', textColor: '#ffffff' }, };
 
 // [수정 1-1] ErdView 컴포넌트에 전달될 props 타입을 정의합니다.
@@ -53,12 +53,12 @@ const EntityShape = React.memo(({ entity, isSelected }: { entity: Entity, isSele
         default: return <Rect {...commonProps} width={entity.width} height={entity.height} cornerRadius={8} />;
     }
 });
-const EntityComponent = React.memo(({ entity, isSelected, onDragEnd, onClick, onDblClick }: EntityComponentProps) => { /* ... (unchanged, onDragMove removed for performance) ... */
+const EntityComponent = React.memo(({ entity, isSelected, onDragMove, onDragEnd, onClick, onDblClick }: EntityComponentProps) => {
   const styles = ENTITY_STYLES[entity.type];
   const textWidth = entity.type === 'Action' ? entity.width * 0.7 : entity.width;
   const textHeight = entity.type === 'Action' ? entity.height * 0.7 : entity.height;
   return (
-    <Group id={entity.id} x={entity.x} y={entity.y} draggable onDragEnd={(e) => onDragEnd(entity.id, e.target.x(), e.target.y())} onClick={() => onClick(entity.id)} onTap={() => onClick(entity.id)} onDblClick={() => onDblClick(entity.id)} onDblTap={() => onDblClick(entity.id)}>
+    <Group id={entity.id} x={entity.x} y={entity.y} draggable onDragMove={(e) => onDragMove(entity.id, e.target.x(), e.target.y())} onDragEnd={(e) => onDragEnd(entity.id, e.target.x(), e.target.y())} onClick={() => onClick(entity.id)} onTap={() => onClick(entity.id)} onDblClick={() => onDblClick(entity.id)} onDblTap={() => onDblClick(entity.id)}>
       <EntityShape entity={entity} isSelected={isSelected} />
       <Text text={entity.name} fontSize={18} fontFamily="Arial" fill={styles.textColor} width={textWidth} height={textHeight} x={(entity.width - textWidth) / 2} y={(entity.height - textHeight) / 2} padding={10} align="center" verticalAlign="middle" listening={false} />
     </Group>
@@ -278,8 +278,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
 
   const handleEntityMove = useCallback((id: string, x: number, y: number) => {
     setEntities((prev) => prev.map((e) => e.id === id ? { ...e, x, y } : e));
-    updateTextareaPosition();
-  }, [setEntities, updateTextareaPosition]);
+  }, [setEntities]);
 
   const handleEntityDblClick = useCallback((id: string) => {
     setRelationshipCreation({ active: false, fromId: null });
@@ -365,6 +364,9 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
   
 
   const editingEntity = entities.find(e => e.id === editingEntityId);
+  const handleDragEnd = useCallback(() => {
+    // onDragEnd logic can be lighter now, maybe for history state management if needed
+  }, []);
 
   return (
     <div className={`canvas-container ${relationshipCreation.active ? 'relationship-mode' : ''}`} ref={containerRef}>
@@ -376,7 +378,7 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
                 if (!fromEntity || !toEntity) return null;
                 return <RelationshipLine key={rel.id} fromEntity={fromEntity} toEntity={toEntity} relationship={rel} isSelected={selectedRelationshipId === rel.id} onSelect={handleRelationshipSelect} onCardinalityChange={handleCardinalityChange} showCardinality={showCardinality} />;
             })}
-            {entities.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragEnd={handleEntityMove} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
+            {entities.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragMove={handleEntityMove} onDragEnd={handleDragEnd} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
           </Layer>
         </Stage>
         {editingEntityId && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity?.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
