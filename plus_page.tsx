@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Stage, Layer, Rect, Text, Group, Line, Circle, Ellipse } from 'react-konva';
 import Konva from 'konva';
@@ -15,7 +15,7 @@ interface EntityComponentProps { entity: Entity; isSelected: boolean; onDragMove
 const ENTITY_STYLES: { [key in EntityType]: { fill: string; stroke: string; textColor: string } } = { Entity: { fill: '#1abc9c', stroke: '#16a085', textColor: '#ffffff' }, Action: { fill: '#3498db', stroke: '#2980b9', textColor: '#ffffff' }, Attribute: { fill: '#e74c3c', stroke: '#c0392b', textColor: '#ffffff' }, };
 
 interface ErdViewProps {
-  entities: Entity[];
+  entities: { [id: string]: Entity };
   relationships: Relationship[];
   onStateChange: (entitiesUpdater: any, relationshipsUpdater: any) => void;
   selectedEntityId: string | null;
@@ -266,12 +266,13 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
 }, stageRef) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({ display: 'none' });
+  const entitiesArray = useMemo(() => Object.values(entities), [entities]);
   
   const setEntities = useCallback((updater) => onStateChange(updater, prevRels => prevRels), [onStateChange]);
   const setRelationships = useCallback((updater) => onStateChange(prevEnts => prevEnts, updater), [onStateChange]);
 
   const updateTextareaPosition = useCallback(() => {
-      const entity = entities.find(e => e.id === editingEntityId);
+      const entity = entities[editingEntityId];
       const stage = (stageRef && 'current' in stageRef) ? stageRef.current : null;
       if (!entity || !stage || !containerRef.current) {
           setTextareaStyle({ display: 'none' });
@@ -325,15 +326,15 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
     const entityId = draggedNode.id();
     const currentPos = draggedNode.position();
 
-    const draggedEntityData = entities.find(en => en.id === entityId);
+    const draggedEntityData = entities[entityId];
     if (!draggedEntityData) return;
     
     const tempDraggedEntity = { ...draggedEntityData, x: currentPos.x, y: currentPos.y };
 
     relationships.forEach(rel => {
         if (rel.fromId === entityId || rel.toId === entityId) {
-            const fromEntity = rel.fromId === entityId ? tempDraggedEntity : entities.find(en => en.id === rel.fromId);
-            const toEntity = rel.toId === entityId ? tempDraggedEntity : entities.find(en => en.id === rel.toId);
+            const fromEntity = rel.fromId === entityId ? tempDraggedEntity : entities[rel.fromId];
+            const toEntity = rel.toId === entityId ? tempDraggedEntity : entities[rel.toId];
 
             if (!fromEntity || !toEntity) return;
 
@@ -341,9 +342,6 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
             
             const lineGroup = stage.findOne('#' + rel.id);
             if (lineGroup) {
-                // FIX: The findOne method is only available on Container nodes (like Stage, Layer, Group), not on generic Nodes.
-                // The result of stage.findOne() is a Node, so it must be cast to a Group to allow further findOne() calls.
-                // Additionally, the found 'line' node must be cast to a Line to access its specific 'points' method.
                 const line = (lineGroup as Konva.Group).findOne('.relationship-line');
                 if(line) (line as Konva.Line).points(points);
                 
@@ -365,7 +363,10 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
 
     const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.currentTarget;
-        setEntities(prev => prev.map(en => en.id === node.id() ? { ...en, x: node.x(), y: node.y() } : en));
+        setEntities(prev => ({
+            ...prev,
+            [node.id()]: { ...prev[node.id()], x: node.x(), y: node.y() }
+        }));
     }, [setEntities]);
 
     const handleEntityDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -380,7 +381,10 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
   const handleFinishEditing = useCallback(() => {
     if (!editingEntityId || !textareaRef.current) return;
     const newName = textareaRef.current.value;
-    setEntities(prev => prev.map(e => e.id === editingEntityId ? {...e, name: newName} : e));
+    setEntities(prev => ({
+        ...prev,
+        [editingEntityId]: { ...prev[editingEntityId], name: newName }
+    }));
     setEditingEntityId(null);
   }, [editingEntityId, setEntities, setEditingEntityId]);
 
@@ -469,19 +473,19 @@ const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
   }, [editingEntityId, handleFinishEditing, setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId]);
   
 
-  const editingEntity = entities.find(e => e.id === editingEntityId);
+  const editingEntity = entities[editingEntityId];
 
   return (
     <div className={`canvas-container ${relationshipCreation.active ? 'relationship-mode' : ''}`} ref={containerRef}>
         <Stage width={3000} height={2000} ref={stageRef} onClick={handleStageClick} onTap={handleStageClick}>
           <Layer>
             {relationships.map((rel) => {
-                const fromEntity = entities.find(e => e.id === rel.fromId);
-                const toEntity = entities.find(e => e.id === rel.toId);
+                const fromEntity = entities[rel.fromId];
+                const toEntity = entities[rel.toId];
                 if (!fromEntity || !toEntity) return null;
                 return <RelationshipLine key={rel.id} fromEntity={fromEntity} toEntity={toEntity} relationship={rel} isSelected={selectedRelationshipId === rel.id} onSelect={handleRelationshipSelect} onCardinalityChange={handleCardinalityChange} showCardinality={showCardinality} />;
             })}
-            {entities.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
+            {entitiesArray.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
           </Layer>
         </Stage>
         {editingEntityId && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity?.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
@@ -497,7 +501,7 @@ const App = () => {
   const [sqlView, setSqlView] = useState<'CREATE' | 'ALTER' | null>(null);
 
   // ERD State
-  const [history, setHistory] = useState<{ entities: Entity[], relationships: Relationship[] }[]>([{ entities: [], relationships: [] }]);
+  const [history, setHistory] = useState<{ entities: { [id: string]: Entity }, relationships: Relationship[] }[]>([{ entities: {}, relationships: [] }]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const { entities, relationships } = history[historyIndex];
   
@@ -524,13 +528,14 @@ const App = () => {
       generatedSql: ''
   });
 
-  const updateState = (entitiesUpdater, relationshipsUpdater) => {
-    const newEntities = typeof entitiesUpdater === 'function' ? entitiesUpdater(entities) : entitiesUpdater;
-    const newRelationships = typeof relationshipsUpdater === 'function' ? relationshipsUpdater(relationships) : relationshipsUpdater;
+  const updateState = useCallback((entitiesUpdater, relationshipsUpdater) => {
+    const { entities: currentEntities, relationships: currentRelationships } = history[historyIndex];
+    const newEntities = typeof entitiesUpdater === 'function' ? entitiesUpdater(currentEntities) : entitiesUpdater;
+    const newRelationships = typeof relationshipsUpdater === 'function' ? relationshipsUpdater(currentRelationships) : relationshipsUpdater;
     const newHistory = history.slice(0, historyIndex + 1);
     setHistory([...newHistory, { entities: newEntities, relationships: newRelationships }]);
     setHistoryIndex(newHistory.length);
-  };
+  }, [history, historyIndex]);
   
   const handleUndo = () => { if (historyIndex > 0) setHistoryIndex(historyIndex - 1); };
   const handleRedo = () => { if (historyIndex < history.length - 1) setHistoryIndex(historyIndex + 1); };
@@ -538,15 +543,19 @@ const App = () => {
   const handleDeleteSelected = useCallback(() => {
     if (selectedEntityId) {
         updateState(
-            prev => prev.filter(e => e.id !== selectedEntityId),
-            prev => prev.filter(r => r.fromId !== selectedEntityId && r.toId !== selectedEntityId)
+            (prevEntities) => {
+                const newEntities = { ...prevEntities };
+                delete newEntities[selectedEntityId];
+                return newEntities;
+            },
+            (prevRels) => prevRels.filter(r => r.fromId !== selectedEntityId && r.toId !== selectedEntityId)
         );
         setSelectedEntityId(null);
     } else if (selectedRelationshipId) {
         updateState(entities, prev => prev.filter(rel => rel.id !== selectedRelationshipId));
         setSelectedRelationshipId(null);
     }
-  }, [selectedEntityId, selectedRelationshipId, entities, historyIndex]);
+  }, [selectedEntityId, selectedRelationshipId, entities, updateState]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -569,7 +578,7 @@ const App = () => {
     const spawnX = container ? container.scrollLeft + container.clientWidth / 2 - 75 : 50;
     const spawnY = container ? container.scrollTop + container.clientHeight / 2 - 40 : 50;
     
-    const count = entities.filter(e => e.type === type).length + 1;
+    const count = Object.values(entities).filter(e => e.type === type).length + 1;
     const newEntity: Entity = {
         id: crypto.randomUUID(),
         x: spawnX,
@@ -579,7 +588,7 @@ const App = () => {
         name: `${type} ${count}`,
         type: type,
     };
-    updateState(prev => [...prev, newEntity], relationships);
+    updateState(prev => ({ ...prev, [newEntity.id]: newEntity }), relationships);
   };
 
   useLayoutEffect(() => {
