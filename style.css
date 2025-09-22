@@ -338,7 +338,6 @@ body {
     margin-bottom: 10px;
 }
 
-#root > div > div > div.toolbar > div.toolbar-scroll-container > fieldset > button:nth-child(3){margin-top: 8px;}
 .alter-type-selector {
     display: flex;
     gap: 20px;
@@ -390,11 +389,16 @@ body {
 .kakao_ad_area {
     margin: 0 auto;
     max-width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: block; /* Changed from flex for better block-level control */
+    overflow: hidden; /* Prevents ad from overflowing its container */
     min-width: 300px;
     min-height: 50px;
+    line-height: 0; /* Removes extra space below the ad */
+}
+
+/* Ensure iframe/ins inside ad area are responsive */
+.kakao_ad_area > * {
+    max-width: 100% !important;
 }
 
 .footer-info {
@@ -459,7 +463,7 @@ body {
   .toolbar-scroll-container {
     display: flex;
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 10px;
     overflow-x: auto;
     overflow-y: hidden;
@@ -474,6 +478,12 @@ body {
   .toolbar-scroll-container > * {
     flex-shrink: 0;
     white-space: nowrap;
+  }
+  
+  /* Add visual separators between tool groups on mobile */
+  .toolbar-scroll-container > fieldset:not(:last-child) {
+      border-right: 1px solid #e0e0e0;
+      padding-right: 10px;
   }
 
   .mode-switcher {
@@ -493,10 +503,6 @@ body {
 
   .toolbar .button-pair {
       display: contents; /* Buttons become direct flex items of the group */
-  }
-
-  #root > div > div > div.toolbar > div.toolbar-scroll-container > fieldset > button:nth-child(3){
-    margin-top: 0px;
   }
   
   .sql-view-container {
@@ -538,6 +544,11 @@ body {
     .column-table th, .column-table td {
         padding: 8px;
         font-size: 13px;
+    }
+    
+    .toolbar button {
+        padding: 10px;
+        font-size: 14px;
     }
 
     .alter-type-selector {
