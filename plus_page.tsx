@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Stage, Layer, Rect, Text, Group, Line, Circle, Ellipse } from 'react-konva';
@@ -769,42 +770,43 @@ const App = () => {
         </div>
       </div>
       <footer className="page-footer">
-        <div className="footer-info">
-          <div className="footer-text">
-            <p>
-              © 2025 PRO(ProjectResolutionsOffice). All Rights Reserved.
-              <br />
-              프로그램 의뢰 및 문의: autocoding.pro@gmail.com
-            </p>
-          </div>
-          <div className="social-links">
-            <a href="https://www.instagram.com/projectresolutionsoffice/" target="_blank" rel="noopener noreferrer" title="Instagram">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-              </svg>
-            </a>
-            <a href="https://blog.naver.com/autocoding-" target="_blank" rel="noopener noreferrer" title="Naver Blog">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <text x="50%" y="54%" dominantBaseline="middle" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="bold" fill="currentColor">B</text>
-              </svg>
-            </a>
-          </div>
+        <div className="footer-ad-container">
+          {/* Desktop Ad */}
+          <ins className="kakao_ad_area ad-desktop"
+                data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
+                data-ad-width = "728"
+                data-ad-height = "90"></ins>
+          <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
+          {/* Mobile Ad */}
+          <ins className="kakao_ad_area ad-mobile"
+                data-ad-unit = "DAN-NSynyUz6zR7D3J8R"
+                data-ad-width = "320"
+                data-ad-height = "100"></ins>
+          <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
         </div>
-
-        {/* Desktop Ad */}
-        <ins className="kakao_ad_area ad-desktop"
-              data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
-              data-ad-width = "728"
-              data-ad-height = "90"></ins>
-        <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
-        {/* Mobile Ad */}
-        <ins className="kakao_ad_area ad-mobile"
-              data-ad-unit = "DAN-NSynyUz6zR7D3J8R"
-              data-ad-width = "320"
-              data-ad-height = "100"></ins>
-        <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
+        
+        <div className="footer-text">
+          <p>
+            © 2025 PRO(ProjectResolutionsOffice). All Rights Reserved.
+            <br />
+            프로그램 의뢰 및 문의: autocoding.pro@gmail.com
+          </p>
+        </div>
+        
+        <div className="social-links">
+          <a href="https://www.instagram.com/projectresolutionsoffice/" target="_blank" rel="noopener noreferrer" title="Instagram">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+            </svg>
+          </a>
+          <a href="https://blog.naver.com/autocoding-" target="_blank" rel="noopener noreferrer" title="Naver Blog">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <text x="50%" y="54%" dominantBaseline="middle" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="bold" fill="currentColor">B</text>
+            </svg>
+          </a>
+        </div>
       </footer>
     </div>
   );
