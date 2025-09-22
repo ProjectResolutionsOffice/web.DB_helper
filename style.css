@@ -1,3 +1,4 @@
+
 /* General body styling */
 body {
   margin: 0;
@@ -379,22 +380,22 @@ body {
   padding: 15px 30px;
   display: flex;
   align-items: center;
-  justify-content: space-between; /* For desktop: ad left, info right */
-  flex-wrap: wrap; /* Allow wrapping */
-  gap: 20px; /* Space between elements */
+  justify-content: space-between; /* For desktop: info left, ad right */
+  flex-wrap: wrap; 
+  gap: 20px; 
   border-top: 1px solid #4a627a;
   box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
 }
 
 .kakao_ad_area {
-  margin: 0; /* Remove auto margin for left alignment */
+  margin: 0;
   max-width: 100%;
   display: block;
   overflow: hidden;
   min-width: 300px;
   min-height: 50px;
   line-height: 0;
-  flex-shrink: 0; /* Prevent ad from shrinking */
+  flex-shrink: 0;
 }
 
 /* Responsive Ad Control */
@@ -410,18 +411,14 @@ body {
 }
 
 .footer-info {
-  width: auto;
-  flex-grow: 1; /* Allows info section to take available space */
   display: flex;
-  align-items: center;
-  justify-content: space-between; /* For desktop: text left, social right */
-  gap: 20px;
-  flex-wrap: wrap;
+  flex-direction: column; /* Stack text and social links */
+  align-items: flex-start; /* Left-align the content */
+  gap: 10px; /* Space between text and social links */
 }
 
 .footer-text {
-  flex-grow: 1; /* Allows text to push social links to the right */
-  text-align: center; /* Center the text within its available space */
+  text-align: left; /* Ensure text is left-aligned */
   font-size: 12px;
   line-height: 1.6;
 }
@@ -457,7 +454,7 @@ body {
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
-    overflow: hidden; /* Prevent content from breaking out */
+    overflow: hidden; 
   }
   .toolbar {
     width: 100%;
@@ -470,7 +467,7 @@ body {
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
     gap: 10px;
-    flex-shrink: 0; /* Ensure toolbar height is respected */
+    flex-shrink: 0;
   }
   .toolbar-scroll-container {
     display: flex;
@@ -479,7 +476,7 @@ body {
     gap: 10px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding-bottom: 5px; /* Space for scrollbar */
+    padding-bottom: 5px; 
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
@@ -516,6 +513,12 @@ body {
       display: contents;
   }
   
+  /* CRITICAL FIX: Ensure main content area takes up remaining space for the canvas to be visible */
+  .main-content-area {
+    flex: 1;
+    min-height: 0;
+  }
+  
   .sql-view-container {
     margin: 15px;
     padding: 15px;
@@ -528,22 +531,25 @@ body {
   
   .page-footer {
     padding: 15px;
-    flex-direction: column; /* Stack items vertically */
+    flex-direction: column; 
     justify-content: center;
     align-items: center;
   }
-
+  
+  .footer-info {
+    order: 2; /* Show info below the ad on mobile */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+  }
+  
   .ad-desktop {
     display: none !important;
   }
   .ad-mobile {
     display: block !important;
-  }
-
-  .footer-info {
-    flex-direction: column;
-    justify-content: center;
-    gap: 15px;
+    order: 1; /* Show ad above the info on mobile */
   }
 
   .footer-text {
