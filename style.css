@@ -7,14 +7,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f0f2f5;
-  overflow: hidden; /* Prevent body scroll */
+  /* overflow: hidden; Removed to allow page scroll when content exceeds viewport */
 }
 
 /* Wrapper for the entire page including the ad banner */
 .page-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh; /* Use min-height to allow content to expand */
 }
 
 /* Main application container */
@@ -378,22 +378,23 @@ body {
   color: #bdc3c7;
   padding: 15px 30px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 15px;
+  justify-content: space-between; /* For desktop: ad left, info right */
+  flex-wrap: wrap; /* Allow wrapping */
+  gap: 20px; /* Space between elements */
   border-top: 1px solid #4a627a;
   box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
 }
 
 .kakao_ad_area {
-    margin: 0 auto;
-    max-width: 100%;
-    display: block; 
-    overflow: hidden; 
-    min-width: 300px;
-    min-height: 50px;
-    line-height: 0; 
+  margin: 0; /* Remove auto margin for left alignment */
+  max-width: 100%;
+  display: block;
+  overflow: hidden;
+  min-width: 300px;
+  min-height: 50px;
+  line-height: 0;
+  flex-shrink: 0; /* Prevent ad from shrinking */
 }
 
 /* Responsive Ad Control */
@@ -401,25 +402,26 @@ body {
   display: block;
 }
 .ad-mobile {
-  display: none !important; /* Force-hide mobile ad on desktop */
+  display: none !important;
 }
 
-/* Ensure iframe/ins inside ad area are responsive */
 .kakao_ad_area > * {
     max-width: 100% !important;
 }
 
 .footer-info {
-  width: 100%;
+  width: auto;
+  flex-grow: 1; /* Allows info section to take available space */
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-between; /* For desktop: text left, social right */
   gap: 20px;
-  flex-wrap: wrap; 
+  flex-wrap: wrap;
 }
 
 .footer-text {
-  text-align: right;
+  flex-grow: 1; /* Allows text to push social links to the right */
+  text-align: center; /* Center the text within its available space */
   font-size: 12px;
   line-height: 1.6;
 }
@@ -437,7 +439,7 @@ body {
 .social-links a {
   color: #bdc3c7;
   transition: color 0.2s ease-in-out, transform 0.2s ease-in-out;
-  display: inline-block; /* For transform to work properly */
+  display: inline-block;
 }
 
 .social-links a:hover {
@@ -455,6 +457,7 @@ body {
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
+    overflow: hidden; /* Prevent content from breaking out */
   }
   .toolbar {
     width: 100%;
@@ -462,11 +465,12 @@ body {
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    padding: 10px 0;
+    padding: 10px;
     box-sizing: border-box;
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
     gap: 10px;
+    flex-shrink: 0; /* Ensure toolbar height is respected */
   }
   .toolbar-scroll-container {
     display: flex;
@@ -475,7 +479,7 @@ body {
     gap: 10px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0 10px 5px 10px;
+    padding-bottom: 5px; /* Space for scrollbar */
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
@@ -488,7 +492,6 @@ body {
     white-space: nowrap;
   }
   
-  /* Add visual separators between tool groups on mobile */
   .toolbar-scroll-container > fieldset:not(:last-child) {
       border-right: 1px solid #e0e0e0;
       padding-right: 10px;
@@ -496,7 +499,7 @@ body {
 
   .mode-switcher {
     width: auto;
-    margin: 0 10px;
+    margin: 0;
   }
   .toolbar fieldset {
     padding: 0;
@@ -510,7 +513,7 @@ body {
   }
 
   .toolbar .button-pair {
-      display: contents; /* Buttons become direct flex items of the group */
+      display: contents;
   }
   
   .sql-view-container {
@@ -525,14 +528,16 @@ body {
   
   .page-footer {
     padding: 15px;
+    flex-direction: column; /* Stack items vertically */
+    justify-content: center;
+    align-items: center;
   }
 
-  /* Responsive Ad Control */
   .ad-desktop {
-    display: none !important; /* Force-hide desktop ad on mobile */
+    display: none !important;
   }
   .ad-mobile {
-    display: block !important; /* Force-show mobile ad */
+    display: block !important;
   }
 
   .footer-info {
