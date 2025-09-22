@@ -1,4 +1,5 @@
 
+
 /* General body styling */
 body {
   margin: 0;
@@ -8,23 +9,22 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f0f2f5;
-  /* overflow: hidden; Removed to allow page scroll when content exceeds viewport */
 }
 
 /* Wrapper for the entire page including the ad banner */
 .page-wrapper {
   display: flex;
   flex-direction: column;
-  min-height: 100vh; /* Use min-height to allow content to expand */
+  min-height: 100vh;
 }
 
 /* Main application container */
 .app-container {
   display: flex;
   flex-direction: row;
-  flex: 1; /* Occupy remaining space */
+  flex: 1; 
   position: relative;
-  min-height: 0; /* Prevents flexbox overflow issues with scrollable children */
+  min-height: 0; 
 }
 
 /* Left-side toolbar */
@@ -38,7 +38,7 @@ body {
   flex-direction: column;
   gap: 15px;
   border-right: 1px solid #e0e0e0;
-  flex-shrink: 0; /* Prevent toolbar from shrinking */
+  flex-shrink: 0;
 }
 
 /* Mode switcher in the toolbar */
@@ -145,11 +145,13 @@ body {
 }
 
 /* Main content area that holds either the canvas or the SQL forms */
+/* CRITICAL FIX: Use flex: 1 and min-height: 0 to ensure proper height calculation in all flex contexts */
 .main-content-area {
-  flex-grow: 1;
+  flex: 1;
   background-color: #e9ecef;
-  overflow: auto; /* Allow scrolling for SQL forms */
-  position: relative; /* Anchor for absolute positioning */
+  overflow: auto; 
+  position: relative;
+  min-height: 0;
 }
 
 /* In ERD mode, let the child canvas handle scrolling to keep the grid background consistent */
@@ -380,11 +382,16 @@ body {
   padding: 15px 30px;
   display: flex;
   align-items: center;
-  justify-content: space-between; /* For desktop: info left, ad right */
+  justify-content: space-between; /* For desktop: ad left, info center, social right */
   flex-wrap: wrap; 
   gap: 20px; 
   border-top: 1px solid #4a627a;
   box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+}
+
+.footer-ad-container {
+  display: flex; /* Helps manage the ad units within */
+  align-items: center;
 }
 
 .kakao_ad_area {
@@ -410,15 +417,9 @@ body {
     max-width: 100% !important;
 }
 
-.footer-info {
-  display: flex;
-  flex-direction: column; /* Stack text and social links */
-  align-items: flex-start; /* Left-align the content */
-  gap: 10px; /* Space between text and social links */
-}
 
 .footer-text {
-  text-align: left; /* Ensure text is left-aligned */
+  text-align: center;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -513,12 +514,6 @@ body {
       display: contents;
   }
   
-  /* CRITICAL FIX: Ensure main content area takes up remaining space for the canvas to be visible */
-  .main-content-area {
-    flex: 1;
-    min-height: 0;
-  }
-  
   .sql-view-container {
     margin: 15px;
     padding: 15px;
@@ -536,20 +531,23 @@ body {
     align-items: center;
   }
   
-  .footer-info {
-    order: 2; /* Show info below the ad on mobile */
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
+  /* Order elements for mobile view */
+  .footer-ad-container {
+    order: 1; /* Ad on top */
   }
-  
+  .footer-text {
+    order: 2; /* Info below ad */
+    text-align: center;
+  }
+   .social-links {
+    order: 3; /* Social links at the bottom */
+  }
+
   .ad-desktop {
     display: none !important;
   }
   .ad-mobile {
     display: block !important;
-    order: 1; /* Show ad above the info on mobile */
   }
 
   .footer-text {
