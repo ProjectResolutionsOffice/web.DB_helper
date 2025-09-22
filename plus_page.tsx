@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Stage, Layer, Rect, Text, Group, Line, Circle, Ellipse } from 'react-konva';
@@ -19,8 +21,7 @@ interface ErdViewProps {
   relationships: Relationship[];
   relationshipsById: { [id: string]: Relationship };
   entityToRelationshipMap: { [id: string]: string[] };
-  // FIX: Use specific types instead of any for onStateChange to improve type safety and fix downstream inference errors.
-  onStateChange: (entitiesUpdater: React.SetStateAction<{ [id: string]: Entity }> | null, relationshipsUpdater: React.SetStateAction<Relationship[]> | null) => void;
+  onStateChange: (entitiesUpdater: any, relationshipsUpdater: any) => void;
   selectedEntityId: string | null;
   setSelectedEntityId: React.Dispatch<React.SetStateAction<string | null>>;
   selectedRelationshipId: string | null;
@@ -164,17 +165,6 @@ const CardinalitySymbol = React.memo(({ x, y, rotation, cardinality, onClick, on
     return (<Group name={name} x={x} y={y} rotation={rotation} onClick={onClick} onTap={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>{renderSymbol()}</Group>);
 }, areCardinalitySymbolsEqual);
 
-// FIX: Define props interface for RelationshipComponent to resolve type errors.
-interface RelationshipComponentProps {
-    relationship: Relationship;
-    fromEntity: Entity | undefined;
-    toEntity: Entity | undefined;
-    isSelected: boolean;
-    onClick: () => void;
-    onCardinalityClick: (relId: string, type: 'start' | 'end') => void;
-    showCardinality: boolean;
-}
-
 const areRelationshipsEqual = (prevProps, nextProps) => {
   const { fromEntity: prevFrom, toEntity: prevTo, relationship: prevRel, isSelected: prevIsSelected, showCardinality: prevShowCardinality } = prevProps;
   const { fromEntity: nextFrom, toEntity: nextTo, relationship: nextRel, isSelected: nextIsSelected, showCardinality: nextShowCardinality } = nextProps;
@@ -191,626 +181,640 @@ const areRelationshipsEqual = (prevProps, nextProps) => {
     prevTo.id === nextTo.id && prevTo.x === nextTo.x && prevTo.y === nextTo.y && prevTo.width === nextTo.width && prevTo.height === nextTo.height
   );
 };
-const RelationshipComponent = React.memo(({ relationship, fromEntity, toEntity, isSelected, onClick, onCardinalityClick, showCardinality }: RelationshipComponentProps) => {
+const RelationshipLine = React.memo(({ fromEntity, toEntity, relationship, isSelected, onSelect, onCardinalityChange, showCardinality }: { fromEntity: Entity; toEntity: Entity; relationship: Relationship; isSelected: boolean; onSelect: (e: Konva.KonvaEventObject<MouseEvent>) => void; onCardinalityChange: (e: Konva.KonvaEventObject<MouseEvent>) => void; showCardinality: boolean; }) => {
     if (!fromEntity || !toEntity) return null;
+    
     const { points, startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
-    const strokeColor = isSelected ? '#007bff' : '#34495e';
 
-    const handleCardinalityClick = (e, type) => {
-        e.cancelBubble = true;
-        onCardinalityClick(relationship.id, type);
-    };
-
-    const handleMouseEnter = e => e.target.getStage().container().style.cursor = 'pointer';
-    const handleMouseLeave = e => e.target.getStage().container().style.cursor = 'default';
-
-    return (
-        <Group>
-            <Line points={points} stroke={strokeColor} strokeWidth={2} onClick={onClick} onTap={onClick} hitStrokeWidth={10} />
-            {showCardinality && (
-                <>
-                    <CardinalitySymbol name="start" {...startSymbolProps} cardinality={relationship.startCardinality} onClick={e => handleCardinalityClick(e, 'start')} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />
-                    <CardinalitySymbol name="end" {...endSymbolProps} cardinality={relationship.endCardinality} onClick={e => handleCardinalityClick(e, 'end')} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />
-                </>
-            )}
-        </Group>
-    );
+    const handleMouseEnter = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'pointer'; };
+    const handleMouseLeave = (e: Konva.KonvaEventObject<MouseEvent>) => { const stage = e.target.getStage(); if (stage) stage.container().style.cursor = 'default'; };
+    return (<Group id={relationship.id}><Line name="relationship-line" points={points} stroke={isSelected ? '#ff8c00' : '#34495e'} strokeWidth={isSelected ? 3 : 2} onClick={onSelect} onTap={onSelect} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} />{showCardinality && (<><CardinalitySymbol name="start-cardinality" x={startSymbolProps.x} y={startSymbolProps.y} rotation={startSymbolProps.rotation} cardinality={relationship.startCardinality} onClick={onCardinalityChange} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /><CardinalitySymbol name="end-cardinality" x={endSymbolProps.x} y={endSymbolProps.y} rotation={endSymbolProps.rotation} cardinality={relationship.endCardinality} onClick={onCardinalityChange} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} /></>)}</Group>);
 }, areRelationshipsEqual);
 
-const CardinalityMenu = ({ menuProps, onSelect, onOutsideClick }) => {
-    const menuRef = useRef(null);
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (menuRef.current && !menuRef.current.contains(event.target)) {
-                onOutsideClick();
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [onOutsideClick]);
+// --- SQL COMPONENTS ---
 
-    if (!menuProps) return null;
+const SqlCreateTable = ({ tableState, setTableState }) => {
+  const { tableName, columns, generatedSql } = tableState;
+  const setTableName = (name) => setTableState(prev => ({ ...prev, tableName: name, generatedSql: '' }));
+  const setColumns = (cols) => setTableState(prev => ({ ...prev, columns: cols, generatedSql: '' }));
+  const setGeneratedSql = (sql) => setTableState(prev => ({ ...prev, generatedSql: sql }));
 
-    const menuStyle: React.CSSProperties = {
-        position: 'absolute',
-        top: `${menuProps.y}px`,
-        left: `${menuProps.x}px`,
-        backgroundColor: 'white',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
-        zIndex: 100,
-        padding: '5px 0',
-    };
+  const handleAddColumn = () => setColumns([...columns, { id: crypto.randomUUID(), name: '', dataType: 'VARCHAR(255)', isPk: false, allowNull: true, defaultValue: '' }]);
+  const handleRemoveColumn = (id: string) => setColumns(columns.filter(c => c.id !== id));
+  
+  const handleColumnChange = (id: string, field: string, value: string | boolean) => {
+    setColumns(columns.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+  
+  const handleGenerateSql = () => {
+    if (!tableName.trim()) { alert('테이블 이름을 입력하세요.'); return; }
+    if (columns.some(c => !c.name.trim())) { alert('모든 컬럼의 이름을 입력하세요.'); return; }
+    if (!columns.some(c => c.isPk)) { alert('기본 키(Primary Key)로 지정된 컬럼이 하나 이상 있어야 합니다.'); return; }
 
-    const buttonStyle: React.CSSProperties = {
-        display: 'block',
-        width: '100%',
-        padding: '8px 15px',
-        border: 'none',
-        background: 'none',
-        textAlign: 'left',
-        cursor: 'pointer',
-    };
-
-    return (
-        <div ref={menuRef} style={menuStyle}>
-            {CARDINALITIES.map(c => (
-                <button key={c} style={buttonStyle} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f0f0f0'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'} onClick={() => onSelect(c)}>
-                    {c.replace(/_/g, ' ')}
-                </button>
-            ))}
-        </div>
-    );
-};
-
-// --- ERD VIEW ---
-
-const ErdView = ({
-  entities, relationships, relationshipsById, entityToRelationshipMap, onStateChange,
-  selectedEntityId, setSelectedEntityId,
-  selectedRelationshipId, setSelectedRelationshipId,
-  relationshipCreation, setRelationshipCreation,
-  editingEntityId, setEditingEntityId,
-  showCardinality, containerRef
-}) => {
-    const stageRef = useRef<Konva.Stage>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-    const [cardinalityMenuProps, setCardinalityMenuProps] = useState(null);
-
-    // FIX: Simplify updateState to be a correctly-typed proxy, fixing a bug with array state updates and improving type safety.
-    const updateState: ((entitiesUpdater: React.SetStateAction<{ [id: string]: Entity; }>, relationshipsUpdater?: null | undefined) => void) & ((entitiesUpdater: null, relationshipsUpdater: React.SetStateAction<Relationship[]>) => void) = (
-        entitiesUpdater, 
-        relationshipsUpdater
-        ) => {
-        onStateChange(entitiesUpdater, relationshipsUpdater);
-    };
-
-    const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-        const id = e.target.id();
-        updateState(prev => ({ ...prev, [id]: { ...prev[id], x: e.target.x(), y: e.target.y() } }), null);
-    }, [updateState]);
-
-    const handleEntityClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-        const entityId = e.target.id();
-        if (relationshipCreation.active && relationshipCreation.fromId && relationshipCreation.fromId !== entityId) {
-            const newRelationship: Relationship = { id: `rel_${Date.now()}`, fromId: relationshipCreation.fromId, toId: entityId, startCardinality: 'ONE', endCardinality: 'ONE' };
-            updateState(null, prev => [...prev, newRelationship]);
-            setRelationshipCreation({ active: false, fromId: null });
+    const pkColumns = columns.filter(c => c.isPk).map(c => `\`${c.name}\``).join(', ');
+    const columnDefs = columns.map(c => {
+      let def = `  \`${c.name}\` ${c.dataType}`;
+      if (!c.allowNull) def += ' NOT NULL';
+      if (c.defaultValue.trim()) {
+        const isNumeric = /^-?\d+(\.\d+)?$/.test(c.defaultValue);
+        const isKeyword = ['CURRENT_TIMESTAMP', 'true', 'false', 'null'].includes(c.defaultValue.toUpperCase());
+        if (isNumeric || isKeyword) {
+          def += ` DEFAULT ${c.defaultValue}`;
         } else {
-            setSelectedEntityId(entityId);
-            setSelectedRelationshipId(null);
+          def += ` DEFAULT '${c.defaultValue.replace(/'/g, "''")}'`;
         }
-    }, [relationshipCreation, updateState, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId]);
+      }
+      return def;
+    }).join(',\n');
 
-    const handleRelationshipClick = useCallback((id: string) => {
-        setSelectedRelationshipId(id);
-        setSelectedEntityId(null);
-    }, [setSelectedRelationshipId, setSelectedEntityId]);
+    const sql = `CREATE TABLE \`${tableName}\` (\n${columnDefs},\n  PRIMARY KEY (${pkColumns})\n);`;
+    setGeneratedSql(sql);
+  };
 
-    const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-        if (e.target === stageRef.current) {
-            setSelectedEntityId(null);
-            setSelectedRelationshipId(null);
-            setEditingEntityId(null);
-            if (relationshipCreation.active) {
-                setRelationshipCreation({ active: false, fromId: null });
-            }
-        }
-    }, [setSelectedEntityId, setSelectedRelationshipId, setEditingEntityId, relationshipCreation, setRelationshipCreation]);
+  return (
+    <div className="sql-view-container">
+      <h2>테이블 생성</h2>
+      <div className="sql-form-group">
+        <label htmlFor="tableName">테이블 이름</label>
+        <input type="text" id="tableName" value={tableName} onChange={e => setTableName(e.target.value)} placeholder="예: users" />
+      </div>
 
-    const handleEntityDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-        e.evt.preventDefault();
-        const id = e.target.id();
-        setEditingEntityId(id);
-    }, [setEditingEntityId]);
+      <table className="column-table">
+        <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>기본키</th><th>NULL 허용</th><th>기본값</th><th>삭제</th></tr></thead>
+        <tbody>
+          {columns.map(col => (
+            <tr key={col.id}>
+              <td><input type="text" value={col.name} onChange={e => handleColumnChange(col.id, 'name', e.target.value)} placeholder="예: id"/></td>
+              <td><input type="text" value={col.dataType} onChange={e => handleColumnChange(col.id, 'dataType', e.target.value)} /></td>
+              <td><input type="checkbox" checked={col.isPk} onChange={e => handleColumnChange(col.id, 'isPk', e.target.checked)} /></td>
+              <td><input type="checkbox" checked={col.allowNull} onChange={e => handleColumnChange(col.id, 'allowNull', e.target.checked)} /></td>
+              <td><input type="text" value={col.defaultValue} onChange={e => handleColumnChange(col.id, 'defaultValue', e.target.value)} /></td>
+              <td><button className="remove-col-btn" onClick={() => handleRemoveColumn(col.id)}>X</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="action-btn" style={{marginTop: '20px'}} onClick={handleAddColumn}>컬럼 추가</button>
+      <button className="action-btn" style={{marginLeft: '10px'}} onClick={handleGenerateSql}>SQL 생성</button>
+      {generatedSql && <div className="sql-output"><div className="sql-output-title">Generated SQL:</div><code>{generatedSql}</code></div>}
+    </div>
+  );
+};
 
-    const handleCardinalityMenu = useCallback((relId: string, type: 'start' | 'end') => {
-        if (!stageRef.current) return;
-        const rel = relationshipsById[relId];
-        const fromEntity = entities[rel.fromId];
-        const toEntity = entities[rel.toId];
-        if (!fromEntity || !toEntity) return;
-
-        const { startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
-        const props = type === 'start' ? startSymbolProps : endSymbolProps;
-        const pos = stageRef.current.getPointerPosition();
-        
-        setCardinalityMenuProps({
-            x: pos.x,
-            y: pos.y,
-            onSelect: (cardinality: Cardinality) => {
-                const key = type === 'start' ? 'startCardinality' : 'endCardinality';
-                updateState(null, prev => prev.map(r => r.id === relId ? { ...r, [key]: cardinality } : r));
-                setCardinalityMenuProps(null);
-            }
-        });
-    }, [entities, relationshipsById, updateState]);
-
-    // Effect for handling textarea editing
-    useEffect(() => {
-        if (editingEntityId && textareaRef.current) {
-            const entity = entities[editingEntityId];
-            const textarea = textareaRef.current;
-            textarea.value = entity.name;
-            textarea.style.display = 'block';
-            textarea.style.position = 'absolute';
-            textarea.style.top = `${entity.y}px`;
-            textarea.style.left = `${entity.x}px`;
-            textarea.style.width = `${entity.width}px`;
-            textarea.style.height = `${entity.height}px`;
-            textarea.focus();
-        } else if (textareaRef.current) {
-            textareaRef.current.style.display = 'none';
-        }
-    }, [editingEntityId, entities]);
-
-    const handleTextareaBlur = useCallback(() => {
-        if (!editingEntityId) return;
-        const newName = textareaRef.current.value;
-        updateState(prev => ({...prev, [editingEntityId]: { ...prev[editingEntityId], name: newName }}), null);
-        setEditingEntityId(null);
-    }, [editingEntityId, updateState, setEditingEntityId]);
-
-    const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleTextareaBlur();
-        } else if (e.key === 'Escape') {
-            setEditingEntityId(null);
-        }
-    }, [handleTextareaBlur, setEditingEntityId]);
-
-    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-
-    useLayoutEffect(() => {
-        const checkSize = () => {
-            if (containerRef.current) {
-                setDimensions({
-                    width: containerRef.current.clientWidth,
-                    height: containerRef.current.clientHeight,
-                });
-            }
-        };
-        checkSize();
-        window.addEventListener('resize', checkSize);
-        return () => window.removeEventListener('resize', checkSize);
-    }, [containerRef]);
+const SqlAlterTable = ({ alterState, setAlterState }) => {
+    const { alterType, tableName, columnName, dataType, generatedSql } = alterState;
     
-    return (
-        <div className={`canvas-container ${relationshipCreation.active ? 'relationship-mode' : ''}`}>
-             <Stage width={dimensions.width || window.innerWidth} height={dimensions.height || window.innerHeight} ref={stageRef} onClick={handleStageClick} onTap={handleStageClick}>
-                <Layer>
-                    {relationships.map(rel => (
-                        <RelationshipComponent
-                            key={rel.id}
-                            relationship={rel}
-                            fromEntity={entities[rel.fromId]}
-                            toEntity={entities[rel.toId]}
-                            isSelected={rel.id === selectedRelationshipId}
-                            onClick={() => handleRelationshipClick(rel.id)}
-                            onCardinalityClick={handleCardinalityMenu}
-                            showCardinality={showCardinality}
-                        />
-                    ))}
-                    {Object.values(entities).map(entity => (
-                        <EntityComponent
-                            key={entity.id}
-                            entity={entity}
-                            isSelected={entity.id === selectedEntityId}
-                            onDragEnd={handleDragEnd}
-                            onDragMove={e => {
-                              const container = e.target.getStage().container();
-                              container.style.cursor = "grabbing";
-                            }}
-                            onClick={handleEntityClick}
-                            onDblClick={handleEntityDblClick}
-                        />
-                    ))}
-                </Layer>
-            </Stage>
-            <div className="entity-editor-wrapper">
-                <textarea
-                    ref={textareaRef}
-                    className="entity-editor"
-                    style={{ display: 'none' }}
-                    onBlur={handleTextareaBlur}
-                    onKeyDown={handleTextareaKeyDown}
-                />
-            </div>
-            <CardinalityMenu
-                menuProps={cardinalityMenuProps}
-                onSelect={(cardinality) => cardinalityMenuProps?.onSelect(cardinality)}
-                onOutsideClick={() => setCardinalityMenuProps(null)}
-            />
-        </div>
-    );
-};
+    const updateState = (field, value) => setAlterState(prev => ({ ...prev, [field]: value, generatedSql: '' }));
 
-// --- SQL VIEW COMPONENTS ---
-
-const dataTypes = ["INT", "VARCHAR(255)", "TEXT", "DATE", "DATETIME", "BOOLEAN", "DECIMAL(10, 2)", "FLOAT", "DOUBLE", "CHAR(1)"];
-
-const ColumnRow = ({ column, index, updateColumn, removeColumn }) => (
-    <tr>
-        <td><input type="text" value={column.name} onChange={e => updateColumn(index, 'name', e.target.value)} placeholder="column_name" /></td>
-        <td>
-            <select value={column.type} onChange={e => updateColumn(index, 'type', e.target.value)}>
-                {dataTypes.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
-        </td>
-        <td><input type="checkbox" checked={column.isPk} onChange={e => updateColumn(index, 'isPk', e.target.checked)} /></td>
-        <td><input type="checkbox" checked={column.isFk} onChange={e => updateColumn(index, 'isFk', e.target.checked)} /></td>
-        <td><input type="checkbox" checked={column.isNotNull} onChange={e => updateColumn(index, 'isNotNull', e.target.checked)} /></td>
-        <td><input type="checkbox" checked={column.isUnique} onChange={e => updateColumn(index, 'isUnique', e.target.checked)} /></td>
-        <td><input type="text" value={column.defaultValue} onChange={e => updateColumn(index, 'defaultValue', e.target.value)} placeholder="NULL" /></td>
-        <td><button className="remove-col-btn" onClick={() => removeColumn(index)}>X</button></td>
-    </tr>
-);
-
-const CreateTableForm = ({ onGenerate }) => {
-    const [tableName, setTableName] = useState('');
-    const [columns, setColumns] = useState([{ name: '', type: 'INT', isPk: false, isFk: false, isNotNull: false, isUnique: false, defaultValue: '' }]);
-
-    const addColumn = () => setColumns([...columns, { name: '', type: 'INT', isPk: false, isFk: false, isNotNull: false, isUnique: false, defaultValue: '' }]);
-    const removeColumn = index => setColumns(columns.filter((_, i) => i !== index));
-    const updateColumn = (index, field, value) => {
-        const newColumns = [...columns];
-        newColumns[index][field] = value;
-        setColumns(newColumns);
-    };
-
-    const generateSQL = () => {
-        let sql = `CREATE TABLE \`${tableName || 'your_table'}\` (\n`;
-        const colDefs = columns.map(c => {
-            if (!c.name) return null;
-            let def = `  \`${c.name}\` ${c.type}`;
-            if (c.isNotNull) def += ' NOT NULL';
-            if (c.isUnique) def += ' UNIQUE';
-            if (c.defaultValue) def += ` DEFAULT ${/^\d+$/.test(c.defaultValue) ? c.defaultValue : `'${c.defaultValue}'`}`;
-            return def;
-        }).filter(Boolean);
-
-        const pkCols = columns.filter(c => c.isPk).map(c => `\`${c.name}\``);
-        if (pkCols.length > 0) {
-            colDefs.push(`  PRIMARY KEY (${pkCols.join(', ')})`);
-        }
+    const handleGenerateSql = () => {
+        if (!tableName.trim()) { alert('테이블 이름을 입력하세요.'); return; }
+        if (!columnName.trim()) { alert('컬럼 이름을 입력하세요.'); return; }
         
-        sql += colDefs.join(',\n');
-        sql += '\n);';
-        onGenerate(sql);
-    };
-
-    return (
-        <div>
-            <h2>CREATE TABLE Statement</h2>
-            <div className="sql-form-group">
-                <label htmlFor="tableName">Table Name:</label>
-                <input id="tableName" type="text" value={tableName} onChange={e => setTableName(e.target.value)} placeholder="e.g., users" />
-            </div>
-            <table className="column-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>PK</th>
-                        <th>FK</th>
-                        <th>Not Null</th>
-                        <th>Unique</th>
-                        <th>Default</th>
-                        <th>Remove</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {columns.map((col, i) => <ColumnRow key={i} column={col} index={i} updateColumn={updateColumn} removeColumn={removeColumn} />)}
-                </tbody>
-            </table>
-            <button className="action-btn" onClick={addColumn} style={{ marginRight: '10px', backgroundColor: '#3498db' }}>Add Column</button>
-            <button className="action-btn" onClick={generateSQL}>Generate SQL</button>
-        </div>
-    );
-};
-
-const AlterTableForm = ({ onGenerate }) => {
-    const [tableName, setTableName] = useState('');
-    const [alterType, setAlterType] = useState('ADD');
-    const [column, setColumn] = useState({ name: '', type: 'INT' });
-    const [newColumnName, setNewColumnName] = useState('');
-
-    const generateSQL = () => {
-        let sql = `ALTER TABLE \`${tableName || 'your_table'}\` `;
-        switch (alterType) {
+        let sql = `ALTER TABLE \`${tableName}\``;
+        switch(alterType) {
             case 'ADD':
-                sql += `ADD COLUMN \`${column.name || 'new_column'}\` ${column.type};`;
-                break;
-            case 'DROP':
-                sql += `DROP COLUMN \`${column.name || 'column_to_drop'}\`;`;
+                sql += ` ADD COLUMN \`${columnName}\` ${dataType};`;
                 break;
             case 'MODIFY':
-                sql += `MODIFY COLUMN \`${column.name || 'column_to_modify'}\` ${column.type};`;
+                sql += ` MODIFY COLUMN \`${columnName}\` ${dataType};`;
                 break;
-            case 'RENAME':
-                sql += `RENAME COLUMN \`${column.name || 'old_name'}\` TO \`${newColumnName || 'new_name'}\`;`;
+            case 'DROP':
+                sql += ` DROP COLUMN \`${columnName}\`;`;
                 break;
         }
-        onGenerate(sql);
+        setAlterState(prev => ({ ...prev, generatedSql: sql }));
     };
-    
+
     return (
-        <div>
-            <h2>ALTER TABLE Statement</h2>
-            <div className="sql-form-group">
-                <label>Table Name:</label>
-                <input type="text" value={tableName} onChange={e => setTableName(e.target.value)} placeholder="e.g., users" />
-            </div>
+        <div className="sql-view-container">
+            <h2>테이블 변경</h2>
             <div className="alter-type-selector">
-                {['ADD', 'DROP', 'MODIFY', 'RENAME'].map(type => (
-                    <label key={type}>
-                        <input type="radio" name="alterType" value={type} checked={alterType === type} onChange={() => setAlterType(type)} />
-                        {type} Column
-                    </label>
-                ))}
+                <label><input type="radio" name="alterType" value="ADD" checked={alterType === 'ADD'} onChange={() => updateState('alterType', 'ADD')} /> 추가</label>
+                <label><input type="radio" name="alterType" value="MODIFY" checked={alterType === 'MODIFY'} onChange={() => updateState('alterType', 'MODIFY')} /> 수정</label>
+                <label><input type="radio" name="alterType" value="DROP" checked={alterType === 'DROP'} onChange={() => updateState('alterType', 'DROP')} /> 삭제</label>
             </div>
-            <div className="sql-form-group">
-                <label>Column Name:</label>
-                <input type="text" value={column.name} onChange={e => setColumn({ ...column, name: e.target.value })} placeholder={alterType === 'RENAME' ? 'Old column name' : 'Column name'} />
-            </div>
-            {(alterType === 'ADD' || alterType === 'MODIFY') && (
-                <div className="sql-form-group">
-                    <label>Column Type:</label>
-                    <select value={column.type} onChange={e => setColumn({ ...column, type: e.target.value })}>
-                        {dataTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                    </select>
-                </div>
-            )}
-            {alterType === 'RENAME' && (
-                <div className="sql-form-group">
-                    <label>New Column Name:</label>
-                    <input type="text" value={newColumnName} onChange={e => setNewColumnName(e.target.value)} placeholder="New column name" />
-                </div>
-            )}
-            <button className="action-btn" onClick={generateSQL}>Generate SQL</button>
+            <div className="sql-form-group"><label htmlFor="alterTableName">테이블 이름</label><input type="text" id="alterTableName" value={tableName} onChange={e => updateState('tableName', e.target.value)} placeholder="예: users"/></div>
+            <div className="sql-form-group"><label htmlFor="alterColumnName">컬럼 이름</label><input type="text" id="alterColumnName" value={columnName} onChange={e => updateState('columnName', e.target.value)} placeholder="예: email"/></div>
+            {alterType !== 'DROP' && <div className="sql-form-group"><label htmlFor="alterDataType">데이터 형식</label><input type="text" id="alterDataType" value={dataType} onChange={e => updateState('dataType', e.target.value)}/></div>}
+            <button className="action-btn" onClick={handleGenerateSql}>SQL 생성</button>
+            {generatedSql && <div className="sql-output"><div className="sql-output-title">Generated SQL:</div><code>{generatedSql}</code></div>}
         </div>
     );
 };
 
-const SqlView = () => {
-    const [sqlType, setSqlType] = useState('CREATE');
-    const [generatedSql, setGeneratedSql] = useState('');
 
-    const renderForm = () => {
-        switch (sqlType) {
-            case 'CREATE': return <CreateTableForm onGenerate={setGeneratedSql} />;
-            case 'ALTER': return <AlterTableForm onGenerate={setGeneratedSql} />;
-            // Add other cases for INSERT, UPDATE, DELETE later
-            default: return <div className="placeholder-text">Select a SQL command type to begin.</div>;
-        }
-    };
+const SqlView = ({ view, createTableState, setCreateTableState, alterTableState, setAlterTableState }) => {
+    if (view === 'CREATE') return <SqlCreateTable tableState={createTableState} setTableState={setCreateTableState} />;
+    if (view === 'ALTER') return <SqlAlterTable alterState={alterTableState} setAlterState={setAlterTableState} />;
+    return <div className="placeholder-text">툴바에서 '테이블 생성' 또는 '테이블 변경'을<br/>선택하여 시작하세요.</div>;
+};
+
+
+// --- ERD VIEW COMPONENT ---
+
+const ErdView = React.forwardRef<Konva.Stage, ErdViewProps>(({
+    entities, relationships, relationshipsById, entityToRelationshipMap, onStateChange,
+    selectedEntityId, setSelectedEntityId,
+    selectedRelationshipId, setSelectedRelationshipId,
+    relationshipCreation, setRelationshipCreation,
+    editingEntityId, setEditingEntityId,
+    showCardinality,
+    containerRef,
+}, stageRef) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [textareaStyle, setTextareaStyle] = useState<React.CSSProperties>({ display: 'none' });
+  const entitiesArray = useMemo(() => Object.values(entities), [entities]);
+  
+  const setEntities = useCallback((updater) => onStateChange(updater, prevRels => prevRels), [onStateChange]);
+  const setRelationships = useCallback((updater) => onStateChange(prevEnts => prevEnts, updater), [onStateChange]);
+
+  const updateTextareaPosition = useCallback(() => {
+      const entity = entities[editingEntityId];
+      const stage = (stageRef && 'current' in stageRef) ? stageRef.current : null;
+      if (!entity || !stage || !containerRef.current) {
+          setTextareaStyle({ display: 'none' });
+          return;
+      }
+      const entityNode = stage.findOne(`#${entity.id}`);
+      if (entityNode) {
+          const styles = ENTITY_STYLES[entity.type];
+          const textPosition = entityNode.getAbsolutePosition();
+          const textWidth = entity.type === 'Action' ? entity.width * 0.7 : entity.width;
+          const textHeight = entity.type === 'Action' ? entity.height * 0.7 : entity.height;
+          const xOffset = (entity.width - textWidth) / 2;
+          const yOffset = (entity.height - textHeight) / 2;
+
+          setTextareaStyle({
+              display: 'block',
+              position: 'absolute',
+              top: `${textPosition.y + yOffset + 5}px`,
+              left: `${textPosition.x + xOffset + 5}px`,
+              width: `${textWidth - 10}px`,
+              height: `${textHeight - 10}px`,
+              backgroundColor: styles.fill,
+              color: styles.textColor,
+              borderColor: styles.textColor,
+          });
+      }
+  }, [editingEntityId, entities, containerRef, stageRef]);
+
+
+  useEffect(() => {
+    updateTextareaPosition();
+    if (editingEntityId && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+    const container = containerRef.current;
+    if (container) {
+      window.addEventListener('resize', updateTextareaPosition);
+      container.addEventListener('scroll', updateTextareaPosition);
+      return () => {
+        window.removeEventListener('resize', updateTextareaPosition);
+        container.removeEventListener('scroll', updateTextareaPosition);
+      }
+    }
+  }, [editingEntityId, updateTextareaPosition, containerRef]);
+
+  const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    const stage = e.target.getStage();
+    if (!stage) return;
+
+    const draggedNode = e.target;
+    const entityId = draggedNode.id();
+    const currentPos = draggedNode.position();
+
+    const draggedEntityData = entities[entityId];
+    if (!draggedEntityData) return;
     
-    return (
-        <div className="sql-view-container">
-            <div className="sql-form-group">
-                <label htmlFor="sqlTypeSelect">SQL Command Type:</label>
-                <select id="sqlTypeSelect" value={sqlType} onChange={e => { setSqlType(e.target.value); setGeneratedSql(''); }}>
-                    <option value="CREATE">CREATE TABLE</option>
-                    <option value="ALTER">ALTER TABLE</option>
-                    <option value="INSERT" disabled>INSERT (Coming Soon)</option>
-                    <option value="UPDATE" disabled>UPDATE (Coming Soon)</option>
-                    <option value="DELETE" disabled>DELETE (Coming Soon)</option>
-                </select>
-            </div>
-            {renderForm()}
-            {generatedSql && (
-                <div className="sql-output">
-                    <div className="sql-output-title">Generated SQL:</div>
-                    <pre><code>{generatedSql}</code></pre>
-                </div>
-            )}
-        </div>
+    const tempDraggedEntity = { ...draggedEntityData, x: currentPos.x, y: currentPos.y };
+    
+    const relationshipIdsToUpdate = entityToRelationshipMap[entityId] || [];
+
+    for (const relId of relationshipIdsToUpdate) {
+        const rel = relationshipsById[relId];
+        if (!rel) continue;
+
+        const fromEntity = rel.fromId === entityId ? tempDraggedEntity : entities[rel.fromId];
+        const toEntity = rel.toId === entityId ? tempDraggedEntity : entities[rel.toId];
+        if (!fromEntity || !toEntity) continue;
+
+        const { points, startSymbolProps, endSymbolProps } = calculateRelationshipRenderProps(fromEntity, toEntity);
+        
+        const lineGroup = stage.findOne('#' + rel.id);
+        if (lineGroup) {
+            const line = (lineGroup as Konva.Group).findOne('.relationship-line');
+            if (line) (line as Konva.Line).points(points);
+            
+            const startSymbol = (lineGroup as Konva.Group).findOne('.start-cardinality');
+            if (startSymbol) {
+                startSymbol.position({ x: startSymbolProps.x, y: startSymbolProps.y });
+                startSymbol.rotation(startSymbolProps.rotation);
+            }
+
+            const endSymbol = (lineGroup as Konva.Group).findOne('.end-cardinality');
+            if (endSymbol) {
+                endSymbol.position({ x: endSymbolProps.x, y: endSymbolProps.y });
+                endSymbol.rotation(endSymbolProps.rotation);
+            }
+        }
+    }
+  }, [entities, relationshipsById, entityToRelationshipMap]);
+
+    const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+        const node = e.currentTarget;
+        setEntities(prev => ({
+            ...prev,
+            [node.id()]: { ...prev[node.id()], x: node.x(), y: node.y() }
+        }));
+    }, [setEntities]);
+
+    const handleEntityDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+        const id = e.currentTarget.id();
+        setRelationshipCreation({ active: false, fromId: null });
+        setSelectedRelationshipId(null);
+        setSelectedEntityId(null);
+        setEditingEntityId(id);
+    }, [setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId, setEditingEntityId]);
+
+
+  const handleFinishEditing = useCallback(() => {
+    if (!editingEntityId || !textareaRef.current) return;
+    const newName = textareaRef.current.value;
+    setEntities(prev => ({
+        ...prev,
+        [editingEntityId]: { ...prev[editingEntityId], name: newName }
+    }));
+    setEditingEntityId(null);
+  }, [editingEntityId, setEntities, setEditingEntityId]);
+
+  const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleFinishEditing();
+    }
+    if (e.key === 'Escape') {
+      setEditingEntityId(null);
+    }
+  }, [handleFinishEditing, setEditingEntityId]);
+
+  const handleEntityClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const id = e.currentTarget.id();
+    if (editingEntityId) {
+        handleFinishEditing();
+        setEditingEntityId(null);
+    }
+
+    if (!relationshipCreation.active) {
+      setSelectedRelationshipId(null);
+      setSelectedEntityId(id);
+      return;
+    }
+    if (!relationshipCreation.fromId) {
+      setSelectedEntityId(null);
+      setRelationshipCreation({ active: true, fromId: id });
+    } else {
+        if (relationshipCreation.fromId === id) return;
+        const fromId = relationshipCreation.fromId;
+        const toId = id;
+        const alreadyExists = relationships.some(rel => (rel.fromId === fromId && rel.toId === toId) || (rel.fromId === toId && rel.toId === fromId));
+        if (alreadyExists) {
+          alert('이미 관계가 설정되어 있는 상태라 관계를 생성할수 없습니다.');
+          setRelationshipCreation({ active: false, fromId: null });
+          return;
+        }
+        const newRelationship: Relationship = { id: crypto.randomUUID(), fromId: relationshipCreation.fromId, toId: id, startCardinality: 'ONE_AND_ONLY_ONE', endCardinality: 'ONE_AND_ONLY_ONE' };
+        setRelationships(prev => [...prev, newRelationship]);
+        setRelationshipCreation({ active: false, fromId: null });
+    }
+  }, [editingEntityId, relationshipCreation, relationships, setRelationships, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId, setEditingEntityId, handleFinishEditing]);
+  
+  const handleRelationshipSelect = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const relationshipGroup = e.currentTarget.getParent();
+    const id = relationshipGroup?.id();
+    if (!id) return;
+
+    if (editingEntityId) handleFinishEditing();
+    setEditingEntityId(null);
+    setRelationshipCreation({ active: false, fromId: null });
+    setSelectedEntityId(null);
+    setSelectedRelationshipId(id);
+  }, [editingEntityId, handleFinishEditing, setEditingEntityId, setRelationshipCreation, setSelectedEntityId, setSelectedRelationshipId]);
+
+  const handleCardinalityChange = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const symbolGroup = e.currentTarget;
+    const relationshipGroup = symbolGroup.getParent();
+    const relationshipId = relationshipGroup?.id();
+    const point = symbolGroup.name().startsWith('start') ? 'start' : 'end';
+    
+    if (!relationshipId) return;
+
+    setRelationships(prevRels =>
+      prevRels.map(rel => {
+        if (rel.id === relationshipId) {
+          const targetProp = point === 'start' ? 'startCardinality' : 'endCardinality';
+          const currentCardinality = rel[targetProp];
+          const currentIndex = CARDINALITIES.indexOf(currentCardinality);
+          const nextIndex = (currentIndex + 1) % CARDINALITIES.length;
+          return { ...rel, [targetProp]: CARDINALITIES[nextIndex] };
+        }
+        return rel;
+      })
     );
-}
+  }, [setRelationships]);
+
+  const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if(e.target === e.target.getStage()) {
+      if(editingEntityId) handleFinishEditing();
+      setRelationshipCreation({ active: false, fromId: null });
+      setSelectedRelationshipId(null);
+      setSelectedEntityId(null);
+    }
+  }, [editingEntityId, handleFinishEditing, setRelationshipCreation, setSelectedRelationshipId, setSelectedEntityId]);
+  
+
+  const editingEntity = entities[editingEntityId];
+
+  return (
+    <div className={`canvas-container ${relationshipCreation.active ? 'relationship-mode' : ''}`} ref={containerRef}>
+        <Stage width={3000} height={2000} ref={stageRef} onClick={handleStageClick} onTap={handleStageClick}>
+          <Layer>
+            {relationships.map((rel) => {
+                const fromEntity = entities[rel.fromId];
+                const toEntity = entities[rel.toId];
+                if (!fromEntity || !toEntity) return null;
+                return <RelationshipLine key={rel.id} fromEntity={fromEntity} toEntity={toEntity} relationship={rel} isSelected={selectedRelationshipId === rel.id} onSelect={handleRelationshipSelect} onCardinalityChange={handleCardinalityChange} showCardinality={showCardinality} />;
+            })}
+            {entitiesArray.map((entity) => <EntityComponent key={entity.id} entity={entity} isSelected={selectedEntityId === entity.id || relationshipCreation.fromId === entity.id} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onClick={handleEntityClick} onDblClick={handleEntityDblClick} />)}
+          </Layer>
+        </Stage>
+        {editingEntityId && <div className="entity-editor-wrapper"><textarea ref={textareaRef} style={textareaStyle} defaultValue={editingEntity?.name} onBlur={handleFinishEditing} onKeyDown={handleTextareaKeyDown} className="entity-editor"/></div>}
+    </div>
+  );
+});
+
 
 // --- MAIN APP COMPONENT ---
 
 const App = () => {
-    const [entities, setEntities] = useState<{ [id: string]: Entity }>({});
-    const [relationships, setRelationships] = useState<Relationship[]>([]);
-    const [viewMode, setViewMode] = useState<'ERD' | 'SQL'>('ERD');
-    const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
-    const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
-    const [relationshipCreation, setRelationshipCreation] = useState({ active: false, fromId: null });
-    const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
-    const [showCardinality, setShowCardinality] = useState(true);
-    const containerRef = useRef(null);
+  const [mode, setMode] = useState<'ERD' | 'SQL'>('ERD');
+  const [sqlView, setSqlView] = useState<'CREATE' | 'ALTER' | null>(null);
 
-    const { relationshipsById, entityToRelationshipMap } = useMemo(() => {
-        const byId = {};
-        const map = {};
-        for (const rel of relationships) {
-            byId[rel.id] = rel;
-            if (!map[rel.fromId]) map[rel.fromId] = [];
-            if (!map[rel.toId]) map[rel.toId] = [];
-            map[rel.fromId].push(rel.id);
-            map[rel.toId].push(rel.id);
-        }
-        return { relationshipsById: byId, entityToRelationshipMap: map };
-    }, [relationships]);
+  // ERD State
+  const [history, setHistory] = useState<{ entities: { [id: string]: Entity }, relationships: Relationship[] }[]>([{ entities: {}, relationships: [] }]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const { entities, relationships } = history[historyIndex];
+  
+  const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [relationshipCreation, setRelationshipCreation] = useState<{ active: boolean; fromId: string | null }>({ active: false, fromId: null });
+  const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
+  const [showCardinality, setShowCardinality] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const erdContainerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
 
+  // SQL State
+  const [createTableState, setCreateTableState] = useState({
+      tableName: '',
+      columns: [{ id: crypto.randomUUID(), name: '', dataType: 'VARCHAR(255)', isPk: false, allowNull: true, defaultValue: '' }],
+      generatedSql: ''
+  });
+  const [alterTableState, setAlterTableState] = useState({
+      alterType: 'ADD' as 'ADD' | 'MODIFY' | 'DROP',
+      tableName: '',
+      columnName: '',
+      dataType: 'VARCHAR(255)',
+      generatedSql: ''
+  });
 
-    const addEntity = (type: EntityType) => {
-        const id = `${type.toLowerCase()}_${Date.now()}`;
-        const newEntity: Entity = { id, x: 100, y: 100, width: 150, height: 75, name: type, type, };
-        setEntities(prev => ({ ...prev, [id]: newEntity }));
-    };
+  const updateState = useCallback((entitiesUpdater, relationshipsUpdater) => {
+    const { entities: currentEntities, relationships: currentRelationships } = history[historyIndex];
+    const newEntities = typeof entitiesUpdater === 'function' ? entitiesUpdater(currentEntities) : entitiesUpdater;
+    const newRelationships = typeof relationshipsUpdater === 'function' ? relationshipsUpdater(currentRelationships) : relationshipsUpdater;
+    const newHistory = history.slice(0, historyIndex + 1);
+    setHistory([...newHistory, { entities: newEntities, relationships: newRelationships }]);
+    setHistoryIndex(newHistory.length);
+  }, [history, historyIndex]);
 
-    const deleteSelected = () => {
-        if (selectedEntityId) {
-            setEntities(prev => {
-                const newEntities = { ...prev };
+  const relationshipsById = useMemo(() => {
+    const map: { [id: string]: Relationship } = {};
+    for (const rel of relationships) {
+        map[rel.id] = rel;
+    }
+    return map;
+  }, [relationships]);
+
+  const entityToRelationshipMap = useMemo(() => {
+      const map: { [id: string]: string[] } = {};
+      for (const entityId in entities) {
+          map[entityId] = [];
+      }
+      for (const rel of relationships) {
+          if (map[rel.fromId]) {
+              map[rel.fromId].push(rel.id);
+          }
+          if (map[rel.toId]) {
+              map[rel.toId].push(rel.id);
+          }
+      }
+      return map;
+  }, [entities, relationships]);
+  
+  const handleUndo = () => { if (historyIndex > 0) setHistoryIndex(historyIndex - 1); };
+  const handleRedo = () => { if (historyIndex < history.length - 1) setHistoryIndex(historyIndex + 1); };
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedEntityId) {
+        updateState(
+            (prevEntities) => {
+                const newEntities = { ...prevEntities };
                 delete newEntities[selectedEntityId];
                 return newEntities;
-            });
-            // Also delete relationships connected to this entity
-            setRelationships(prev => prev.filter(rel => rel.fromId !== selectedEntityId && rel.toId !== selectedEntityId));
-            setSelectedEntityId(null);
-        }
-        if (selectedRelationshipId) {
-            setRelationships(prev => prev.filter(rel => rel.id !== selectedRelationshipId));
-            setSelectedRelationshipId(null);
-        }
-    };
+            },
+            (prevRels) => prevRels.filter(r => r.fromId !== selectedEntityId && r.toId !== selectedEntityId)
+        );
+        setSelectedEntityId(null);
+    } else if (selectedRelationshipId) {
+        updateState(entities, prev => prev.filter(rel => rel.id !== selectedRelationshipId));
+        setSelectedRelationshipId(null);
+    }
+  }, [selectedEntityId, selectedRelationshipId, entities, updateState]);
 
-    const toggleRelationshipCreation = () => {
-        if (!selectedEntityId && !relationshipCreation.active) {
-            alert("Please select an entity to start a relationship from.");
-            return;
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (mode === 'ERD') {
+            const isEditing = !!editingEntityId;
+            if (isEditing) return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); handleUndo(); }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') { e.preventDefault(); handleRedo(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); handleRedo(); }
+            if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedRelationshipId || selectedEntityId)) { handleDeleteSelected(); }
         }
-        setRelationshipCreation(prev => ({
-            active: !prev.active,
-            fromId: !prev.active ? selectedEntityId : null,
-        }));
     };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, selectedRelationshipId, selectedEntityId, editingEntityId, handleDeleteSelected, handleUndo, handleRedo]);
+  
+  const handleAddEntity = (type: EntityType) => {
+    const container = erdContainerRef.current;
+    const spawnX = container ? container.scrollLeft + container.clientWidth / 2 - 75 : 50;
+    const spawnY = container ? container.scrollTop + container.clientHeight / 2 - 40 : 50;
     
-    const exportToPNG = () => {
-        alert("Export functionality is being rebuilt and will be available soon!");
+    const count = Object.values(entities).filter(e => e.type === type).length + 1;
+    const newEntity: Entity = {
+        id: crypto.randomUUID(),
+        x: spawnX,
+        y: spawnY,
+        width: type === 'Action' ? 120 : 150,
+        height: type === 'Action' ? 120 : 75,
+        name: `${type} ${count}`,
+        type: type,
     };
-    
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
-                deleteSelected();
-            }
-            if (e.key === 'Escape') {
-                setRelationshipCreation({ active: false, fromId: null });
-                setSelectedEntityId(null);
-                setSelectedRelationshipId(null);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedEntityId, selectedRelationshipId]);
+    updateState(prev => ({ ...prev, [newEntity.id]: newEntity }), relationships);
+  };
 
-
-    return (
-      <div className="page-wrapper">
-        <div className="app-container">
-          <div className="toolbar">
-              <div className="mode-switcher">
-                  <button onClick={() => setViewMode('ERD')} className={viewMode === 'ERD' ? 'active' : ''}>ERD Mode</button>
-                  <button onClick={() => setViewMode('SQL')} className={viewMode === 'SQL' ? 'active' : ''}>SQL Mode</button>
-              </div>
-              <div className="toolbar-scroll-container">
-                  <fieldset>
-                      <legend>Shapes</legend>
-                      <button onClick={() => addEntity('Entity')}>Add Entity</button>
-                      <button onClick={() => addEntity('Action')}>Add Action</button>
-                      <button onClick={() => addEntity('Attribute')}>Add Attribute</button>
-                  </fieldset>
-                  <fieldset>
-                      <legend>Tools</legend>
-                      <button onClick={toggleRelationshipCreation} className={relationshipCreation.active ? 'active' : ''}>
-                          {relationshipCreation.active ? "Cancel" : "Add Relationship"}
-                      </button>
-                      {relationshipCreation.active && <div className="tooltip">Click another entity to connect.</div>}
-                       <div className="button-pair">
-                          <button onClick={() => setShowCardinality(!showCardinality)}>
-                              {showCardinality ? "Hide" : "Show"} Cardinality
-                          </button>
-                          <button onClick={deleteSelected} disabled={!selectedEntityId && !selectedRelationshipId}>Delete</button>
-                      </div>
-                  </fieldset>
-                  <fieldset>
-                      <legend>Export</legend>
-                      <button onClick={exportToPNG}>Export as PNG</button>
-                  </fieldset>
-              </div>
+  useLayoutEffect(() => {
+    if (isExporting) {
+        const stage = stageRef.current;
+        if (stage) {
+            const dataURL = stage.toDataURL({ mimeType: 'image/png', quality: 1, pixelRatio: 2 });
+            const link = document.createElement('a');
+            link.download = 'erd-diagram.png';
+            link.href = dataURL;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        setIsExporting(false);
+    }
+  }, [isExporting]);
+  
+  const handleExportImage = () => {
+    setSelectedRelationshipId(null);
+    setSelectedEntityId(null);
+    setEditingEntityId(null);
+    setIsExporting(true);
+  };
+  
+  return (
+    <div className="page-wrapper">
+      <div className="app-container">
+        <div className="toolbar">
+          <div className="mode-switcher">
+              <button className={mode === 'ERD' ? 'active' : ''} onClick={() => setMode('ERD')}>ERD 모드</button>
+              <button className={mode === 'SQL' ? 'active' : ''} onClick={() => setMode('SQL')}>SQL 작성 모드</button>
           </div>
-          <main ref={containerRef} className={`main-content-area ${viewMode === 'ERD' ? 'erd-mode' : ''}`}>
-             {viewMode === 'ERD' ? (
-                  <ErdView
-                      entities={entities}
-                      relationships={relationships}
-                      relationshipsById={relationshipsById}
-                      entityToRelationshipMap={entityToRelationshipMap}
-                      onStateChange={(entitiesUpdater, relationshipsUpdater) => {
-                          if (entitiesUpdater) setEntities(entitiesUpdater);
-                          if (relationshipsUpdater) setRelationships(relationshipsUpdater);
-                      }}
-                      selectedEntityId={selectedEntityId}
-                      setSelectedEntityId={setSelectedEntityId}
-                      selectedRelationshipId={selectedRelationshipId}
-                      setSelectedRelationshipId={setSelectedRelationshipId}
-                      relationshipCreation={relationshipCreation}
-                      setRelationshipCreation={setRelationshipCreation}
-                      editingEntityId={editingEntityId}
-                      setEditingEntityId={setEditingEntityId}
-                      showCardinality={showCardinality}
-                      containerRef={containerRef}
-                  />
-              ) : (
-                  <SqlView />
-              )}
-          </main>
+          <div className="toolbar-scroll-container">
+            {mode === 'ERD' && (
+                <>
+                    <fieldset>
+                        <legend>도형 추가</legend>
+                        <button onClick={() => handleAddEntity('Entity')}>Entity</button>
+                        <button onClick={() => handleAddEntity('Action')}>Action</button>
+                        <button onClick={() => handleAddEntity('Attribute')}>Attribute</button>
+                    </fieldset>
+                     <fieldset>
+                        <legend>편집</legend>
+                        <div className="button-pair">
+                            <button onClick={handleUndo} disabled={historyIndex === 0}>Undo</button>
+                            <button onClick={handleRedo} disabled={historyIndex === history.length - 1}>Redo</button>
+                        </div>
+                        <button onClick={handleDeleteSelected} disabled={!selectedEntityId && !selectedRelationshipId}>선택 항목 삭제</button>
+                    </fieldset>
+                    <fieldset>
+                        <legend>도구</legend>
+                        <button onClick={() => { setEditingEntityId(null); setSelectedRelationshipId(null); setSelectedEntityId(null); setRelationshipCreation(prev => ({ active: !prev.active, fromId: null })); }} className={relationshipCreation.active ? 'active' : ''}>관계 추가</button>
+                        <button onClick={() => setShowCardinality(prev => !prev)}>{showCardinality ? 'Cardinality 숨기기' : 'Cardinality 보이기'}</button>
+                        <button onClick={handleExportImage}>이미지로 저장</button>
+                    </fieldset>
+                    {relationshipCreation.active && <div className="tooltip">{relationshipCreation.fromId ? '대상 엔티티 선택' : '시작 엔티티 선택'}</div>}
+                </>
+            )}
+            
+            {mode === 'SQL' && (
+              <>
+                <fieldset>
+                    <legend>SQL 작업</legend>
+                    <button onClick={() => setSqlView('CREATE')} className={sqlView === 'CREATE' ? 'active' : ''}>테이블 생성</button>
+                    <button onClick={() => setSqlView('ALTER')} className={sqlView === 'ALTER' ? 'active' : ''}>테이블 변경</button>
+                </fieldset>
+              </>
+            )}
+          </div>
         </div>
 
-        <footer className="page-footer">
-          <div className="footer-info">
-            <div className="social-links">
-                <a href="https://github.com/autocoding-pro" target="_blank" rel="noopener noreferrer" aria-label="Github">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.91 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                </a>
-                <a href="https://www.instagram.com/autocoding_pro" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.85s-.011 3.584-.069 4.85c-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07s-3.584-.012-4.85-.07c-3.252-.148-4.771-1.691-4.919-4.919-.058-1.265-.069-1.645-.069-4.85s.011-3.584.069-4.85c.149-3.225 1.664 4.771 4.919 4.919 1.266-.057 1.644-.069 4.85-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948s.014 3.667.072 4.947c.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072s3.667-.014 4.947-.072c4.358-.2 6.78-2.618 6.98-6.98.059-1.281.073-1.689.073-4.948s-.014-3.667-.072-4.947c-.2-4.358-2.618-6.78-6.98-6.98-1.281-.059-1.689-.073-4.948-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.162 6.162 6.162 6.162-2.759 6.162-6.162-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4s1.791-4 4-4 4 1.79 4 4-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44 1.441-.645 1.441-1.44-.645-1.44-1.441-1.44z"/></svg>
-                </a>
-            </div>
-            <div className="footer-text">
-                <p>© 2025 PRO(ProjectResolutionsOffice). All Rights Reserved.</p>
-                <p>프로그램 의뢰 및 문의: autocoding.pro@gmail.com</p>
-            </div>
-          </div>
-          <div className="footer-ad-container">
-              <div className="ad-desktop">
-                <ins className="kakao_ad_area" style={{display:"none"}}
-                data-ad-unit = "DAN-6iQkP135T7A3hAAr"
+        <div className={`main-content-area ${mode === 'ERD' ? 'erd-mode' : ''}`}>
+          {mode === 'ERD' ? (
+            <ErdView 
+              ref={stageRef}
+              entities={entities} 
+              relationships={relationships}
+              relationshipsById={relationshipsById}
+              entityToRelationshipMap={entityToRelationshipMap}
+              onStateChange={updateState}
+              selectedEntityId={selectedEntityId} setSelectedEntityId={setSelectedEntityId}
+              selectedRelationshipId={selectedRelationshipId} setSelectedRelationshipId={setSelectedRelationshipId}
+              relationshipCreation={relationshipCreation} setRelationshipCreation={setRelationshipCreation}
+              editingEntityId={editingEntityId} setEditingEntityId={setEditingEntityId}
+              showCardinality={showCardinality}
+              containerRef={erdContainerRef}
+            />
+          ) : (
+            <SqlView 
+              view={sqlView}
+              createTableState={createTableState} setCreateTableState={setCreateTableState}
+              alterTableState={alterTableState} setAlterTableState={setAlterTableState}
+            />
+          )}
+        </div>
+      </div>
+      <footer className="page-footer">
+        <div className="footer-ad-container">
+          {/* Desktop Ad */}
+          <ins className="kakao_ad_area ad-desktop"
+                data-ad-unit = "DAN-UYvLxRjSAWSkaXPW"
                 data-ad-width = "728"
                 data-ad-height = "90"></ins>
-                <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
-              </div>
-              <div className="ad-mobile">
-                <ins className="kakao_ad_area" style={{display:"none"}}
+          <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
+          {/* Mobile Ad */}
+          <ins className="kakao_ad_area ad-mobile"
                 data-ad-unit = "DAN-NSynyUz6zR7D3J8R"
                 data-ad-width = "320"
                 data-ad-height = "100"></ins>
-                <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
-              </div>
+          <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
+        </div>
+        
+        <div className="footer-info">
+          <div className="social-links">
+            <a href="https://www.instagram.com/projectresolutionsoffice/" target="_blank" rel="noopener noreferrer" title="Instagram">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+              </svg>
+            </a>
+            <a href="https://blog.naver.com/autocoding-" target="_blank" rel="noopener noreferrer" title="Naver Blog">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <text x="50%" y="54%" dominantBaseline="middle" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="bold" fill="currentColor">B</text>
+              </svg>
+            </a>
           </div>
-        </footer>
-      </div>
-    );
+          <div className="footer-text">
+            <p>
+              © 2025 PRO(ProjectResolutionsOffice). All Rights Reserved.
+              <br />
+              프로그램 의뢰 및 문의: autocoding.pro@gmail.com
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
 };
 
 const container = document.getElementById('root');
-const root = createRoot(container);
-root.render(<App />);
+if(container) {
+    const root = createRoot(container);
+    root.render(<App />);
+}
