@@ -396,6 +396,11 @@ body {
     line-height: 0; /* Removes extra space below the ad */
 }
 
+/* Responsive Ad Control */
+.ad-mobile {
+  display: none;
+}
+
 /* Ensure iframe/ins inside ad area are responsive */
 .kakao_ad_area > * {
     max-width: 100% !important;
@@ -521,6 +526,14 @@ body {
     justify-content: center;
     padding: 15px;
     gap: 15px;
+  }
+
+  /* Responsive Ad Control */
+  .ad-desktop {
+    display: none;
+  }
+  .ad-mobile {
+    display: block;
   }
 
   .footer-info {
