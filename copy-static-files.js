@@ -5,6 +5,7 @@ const filesToCopy = [
   'robots.txt',
   'ads.txt',
   'googleef03e757e46e8c03.html',
+  'erd_icon.png',
   //'webicon.svg',
   // 여기에 복사하고 싶은 다른 파일이 있다면 추가하세요.
   // 'metadata.json', 
