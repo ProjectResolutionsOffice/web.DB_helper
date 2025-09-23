@@ -72,6 +72,16 @@ body {
     border-right: 1px solid #ccc;
 }
 
+.toolbar-scroll-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  flex: 1;
+  min-height: 0; /* Crucial for flex shrinking and enabling scroll */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 
 /* Group for shape buttons using fieldset */
 .toolbar fieldset {
@@ -456,7 +466,7 @@ body {
 
 /* --- Responsive Design --- */
 /* Tablet & Mobile */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .app-container {
     flex-direction: column;
     overflow: hidden; 
@@ -484,9 +494,9 @@ body {
     padding-bottom: 5px; 
     -ms-overflow-style: none;
     scrollbar-width: none;
-  }
-  .toolbar-scroll-container::-webkit-scrollbar {
-    display: none;
+    /* Reset flex properties from desktop styles */
+    flex: initial;
+    min-height: initial;
   }
   
   .toolbar-scroll-container > * {
